@@ -245,7 +245,6 @@ def load_sample_data():
     """Load data dengan sample untuk presentasi"""
     try:
         df = pd.read_csv("crypto_top1000_dataset.csv")
-        st.success("✅ Real data loaded successfully")
     except:
         # Create sample data for presentation if file not found
         st.warning("⚠️ Using sample data for presentation")
@@ -1206,3 +1205,4 @@ st.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
