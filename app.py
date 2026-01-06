@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # =====================
-# STYLE (MINIMALIS)
+# STYLE (MINIMALIS & RAMAH PEMULA)
 # =====================
 st.markdown("""
 <style>
@@ -43,6 +43,26 @@ st.markdown("""
     }
     .stTabs [aria-selected="true"] {
         background-color: #1e88e5;
+    }
+    .insight-box {
+        background-color: #1e1e1e;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border-left: 5px solid #1e88e5;
+    }
+    .risk-box {
+        background-color: #1e1e1e;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 10px 0;
+    }
+    .tip-box {
+        background-color: #2d2d2d;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #444;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -79,7 +99,7 @@ df["volume_marketcap_ratio"] = df["total_volume"] / df["market_cap"]
 df["supply_inflation_risk"] = 1 - df["supply_utilization"]
 
 # =====================
-# OUTLIER CAPPING & SCALING (PERBAIKAN UNTUK SIZE)
+# OUTLIER CAPPING & SCALING
 # =====================
 def cap_outliers(series):
     q1, q3 = series.quantile([0.25, 0.75])
@@ -95,7 +115,6 @@ scale_cols = [
     "volume_marketcap_ratio"
 ]
 
-# Simpan data asli untuk visualisasi
 df["total_volume_original"] = df["total_volume"].copy()
 
 for col in scale_cols:
@@ -104,7 +123,7 @@ for col in scale_cols:
 scaler = RobustScaler()
 df[scale_cols] = scaler.fit_transform(df[scale_cols])
 
-# Normalisasi size untuk visualisasi (pastikan tidak negatif)
+# Normalisasi size untuk visualisasi
 df["size_normalized"] = (df["total_volume_original"] - df["total_volume_original"].min()) / \
                         (df["total_volume_original"].max() - df["total_volume_original"].min()) * 30 + 5
 
@@ -116,20 +135,46 @@ def categorize(rank):
     if rank <= 50: return "Mid Cap"
     return "Small Cap"
 
+def get_sentiment_emoji(score):
+    if score > 5:
+        return "😊", "Positif", "green"
+    elif score < -5:
+        return "😟", "Negatif", "red"
+    else:
+        return "😐", "Netral", "yellow"
+
+def get_risk_level(score):
+    if score <= 30:
+        return "🟢 Rendah", "Pasar stabil, risiko minimal", "#00cc00"
+    elif score <= 70:
+        return "🟡 Sedang", "Pasar cukup volatil, hati-hati", "#ffcc00"
+    else:
+        return "🔴 Tinggi", "Pasar sangat volatil, risiko tinggi", "#ff3333"
+
 # =====================
 # SIDEBAR
 # =====================
 st.sidebar.title("⚙️ Filter & Kontrol")
 
 # Panduan untuk pemula
-with st.sidebar.expander("📖 Panduan Cepat", expanded=False):
+with st.sidebar.expander("📖 Panduan Cepat untuk Pemula", expanded=True):
     st.markdown("""
-    **Glossary:**
-    - **Market Cap**: Nilai total pasar = harga × jumlah koin beredar
-    - **Volatilitas**: Ukuran fluktuasi harga (semakin tinggi = semakin berisiko)
-    - **FDV/MC Ratio**: Perbandingan nilai penuh vs nilai pasar saat ini
-    - **Volume/MC Ratio**: Aktivitas trading relatif terhadap ukuran pasar
-    - **Top Gainers**: Koin dengan kenaikan harga tertinggi (24 jam)
+    **Untuk Anda yang baru mulai:**
+    
+    **🎯 Fokus pada:**
+    1. **Market Cap Rank** - Peringkat berdasarkan ukuran pasar
+    2. **Perubahan Harga 24h** - Naik/turun dalam sehari
+    3. **Volume Trading** - Seberapa aktif diperdagangkan
+    
+    **💡 Tips:**
+    - Mulai dari **koin besar** (Rank 1-20) - lebih stabil
+    - Cek **Volume/Market Cap Ratio** > 0.05 = likuiditas baik
+    - Hindari **volatilitas tinggi** jika pemula
+    
+    **📊 Istilah Penting:**
+    - **Market Cap**: Nilai total pasar
+    - **Volatilitas**: Tingkat fluktuasi harga
+    - **FDV/MC**: Potensi penambahan supply
     """)
 
 st.sidebar.markdown("---")
@@ -137,9 +182,9 @@ st.sidebar.subheader("🔍 Filter Data")
 
 # Filter market cap rank
 rank_range = st.sidebar.slider(
-    "Market Cap Rank",
+    "Peringkat Market Cap",
     1, 1000, (1, 100),
-    help="Filter berdasarkan peringkat market cap (1 = terbesar)"
+    help="1 = terbesar (Bitcoin), 100 = lebih kecil"
 )
 
 # Filter tambahan untuk pemula
@@ -148,8 +193,8 @@ st.sidebar.subheader("🎯 Filter Performa")
 
 performance_filter = st.sidebar.selectbox(
     "Tampilkan koin dengan:",
-    ["Semua Koin", "Harga Naik 24h", "Harga Turun 24h", "Volatilitas Tinggi", "Volume Trading Tinggi"],
-    help="Filter berdasarkan performa koin"
+    ["Semua Koin", "Harga Naik 24h", "Harga Turun 24h", "Volatilitas Rendah", "Volume Trading Tinggi"],
+    help="Volatilitas Rendah = lebih stabil untuk pemula"
 )
 
 # Aplikasikan filter
@@ -162,8 +207,8 @@ if performance_filter == "Harga Naik 24h":
     df_filtered = df_filtered[df_filtered["price_change_percentage_24h"] > 0]
 elif performance_filter == "Harga Turun 24h":
     df_filtered = df_filtered[df_filtered["price_change_percentage_24h"] < 0]
-elif performance_filter == "Volatilitas Tinggi":
-    df_filtered = df_filtered[df_filtered["volatility_24h"] > df_filtered["volatility_24h"].quantile(0.75)]
+elif performance_filter == "Volatilitas Rendah":
+    df_filtered = df_filtered[df_filtered["volatility_24h"] < df_filtered["volatility_24h"].quantile(0.25)]
 elif performance_filter == "Volume Trading Tinggi":
     df_filtered = df_filtered[df_filtered["volume_marketcap_ratio"] > df_filtered["volume_marketcap_ratio"].quantile(0.75)]
 
@@ -175,554 +220,728 @@ df_filtered["category"] = df_filtered["market_cap_rank"].apply(categorize)
 # =====================
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.title("📊 Crypto Market Dashboard")
+    st.title("📊 Dashboard Pasar Crypto")
     st.markdown(
-        "Analisis **market dominance, volatilitas, dan performa harga kripto** secara interaktif."
+        "**Dashboard interaktif untuk memahami pasar crypto dengan mudah**"
     )
 with col2:
-    st.info("ℹ️ Dashboard interaktif untuk analisis pasar kripto")
+    st.info("🎯 **Tips**: Gunakan filter di sidebar untuk mulai eksplorasi")
 
 # =====================
 # TABS FOR ORGANIZATION
 # =====================
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "🏆 Top Performers", "📊 Detail Analisis", "⚠️ Risk Assessment"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Overview", "🏆 Top Performers", "📊 Detail Analisis", "⚠️ Risk Assessment", "🚀 Quick Insights"])
 
 # =====================
-# TAB 1: OVERVIEW
+# TAB 1: OVERVIEW - DIPERBAIKI
 # =====================
 with tab1:
-    # KPI METRICS
-    st.subheader("📊 Market Snapshot")
+    # KPI METRICS - Sederhana untuk pemula
+    st.subheader("📊 Snapshoot Pasar Hari Ini")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total Koin", len(df_filtered))
-        st.caption("Dalam range yang dipilih")
+        total_market_cap = df_filtered['market_cap'].sum()
+        st.metric("💰 Total Nilai Pasar", f"${total_market_cap:,.0f}")
+        st.caption("Nilai semua koin dalam filter")
     
     with col2:
-        avg_vol = df_filtered["volatility_24h"].mean()
-        st.metric("Rata-rata Volatilitas", f"{avg_vol:.2%}")
-        st.caption("24 jam terakhir")
+        avg_change = df_filtered["price_change_percentage_24h"].mean()
+        emoji, label, color = get_sentiment_emoji(avg_change)
+        st.metric("📈 Sentimen Pasar", f"{avg_change:+.1f}%", label=f"{emoji} {label}")
+        st.caption("Rata-rata perubahan harga")
     
     with col3:
-        avg_volume_ratio = df_filtered["volume_marketcap_ratio"].mean()
-        st.metric("Avg Volume/MarketCap", f"{avg_volume_ratio:.3f}")
-        st.caption("Rasio aktivitas")
-    
-    with col4:
         gainers = (df_filtered["price_change_percentage_24h"] > 0).sum()
         total_coins = len(df_filtered)
-        st.metric("Koin Naik (24h)", f"{gainers}/{total_coins}", 
-                 f"{(gainers/total_coins*100):.1f}%")
+        ratio = (gainers/total_coins*100) if total_coins > 0 else 0
+        st.metric("📊 Koin Naik/Turun", f"{gainers}/{total_coins}", f"{ratio:.1f}%")
+        st.caption("Lebih banyak hijau = pasar sehat")
     
-    # Additional KPIs
-    col5, col6, col7, col8 = st.columns(4)
-    
-    with col5:
-        total_market_cap = df_filtered['market_cap'].sum()
-        st.metric("Total Market Cap", f"${total_market_cap:,.0f}")
-        st.caption("Nilai pasar total")
-    
-    with col6:
-        top_10 = df.nsmallest(10, "market_cap_rank")
-        dominance = (top_10['market_cap'].sum() / df_filtered['market_cap'].sum() * 100) if df_filtered['market_cap'].sum() > 0 else 0
-        st.metric("Dominasi Top 10", f"{dominance:.1f}%")
-        st.caption("Konsentrasi pasar")
-    
-    with col7:
-        gain_ratio = (df_filtered['price_change_percentage_24h'] > 0).mean()
-        st.metric("Rasio Naik/Turun", f"{gain_ratio:.1%}")
-        st.caption("Sentimen pasar")
-    
-    with col8:
-        avg_fdv_ratio = df_filtered['fdv_mc_ratio'].median()
-        st.metric("Avg FDV/MC Ratio", f"{avg_fdv_ratio:.2f}")
-        st.caption("Potensi pengenceran")
+    with col4:
+        avg_volume_ratio = df_filtered["volume_marketcap_ratio"].mean()
+        volume_status = "🟢 Aktif" if avg_volume_ratio > 0.05 else "🟡 Tenang"
+        st.metric("💎 Aktivitas Trading", f"{avg_volume_ratio:.3f}", volume_status)
+        st.caption("Semakin tinggi = semakin cair")
     
     st.markdown("---")
+    
+    # INSIGHT BOX UNTUK PEMULA
+    st.markdown("""
+    <div class="insight-box">
+        <h4>🎯 Apa yang Harus Diperhatikan?</h4>
+        <ul>
+            <li><b>Market Cap Besar</b> = Lebih stabil, risiko lebih rendah</li>
+            <li><b>Volume Trading Tinggi</b> = Mudah beli/jual</li>
+            <li><b>Perubahan Hijau</b> = Banyak koin naik</li>
+            <li><b>Sentimen Positif</b> = Pasar optimis</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
     
     # ROW 1: Market Dominance & Distribution
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("🗺️ Dominasi Market")
-        fig = px.treemap(
-            df_filtered.head(30),  # Batasi untuk visual yang lebih jelas
-            path=["category", "symbol"],
-            values="market_cap",
-            color="price_change_percentage_24h",
-            color_continuous_scale="RdYlGn",
-            color_continuous_midpoint=0,
-            template="plotly_dark",
-            hover_data=["current_price", "market_cap_rank"]
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Ukuran: Market Cap | Warna: Perubahan harga 24h")
-    
-    with col2:
-        st.subheader("📊 Distribusi Volatilitas")
-        fig = px.histogram(
-            df_filtered,
-            x="price_change_percentage_24h",
-            nbins=30,
-            template="plotly_dark",
-            color_discrete_sequence=['#1e88e5']
-        )
-        fig.add_vline(x=0, line_dash="dash", line_color="white", annotation_text="Netral")
-        fig.update_layout(
-            xaxis_title="Perubahan Harga (%) - 24h",
-            yaxis_title="Jumlah Koin"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Distribusi perubahan harga dalam 24 jam terakhir")
-    
-    # ROW 2: Market Health Indicators
-    st.subheader("❤️ Market Health Indicators")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # Market Sentiment Gauge
-        sentiment_score = df_filtered['price_change_percentage_24h'].mean() * 100 if len(df_filtered) > 0 else 0
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=sentiment_score,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Sentimen Pasar"},
-            gauge={
-                'axis': {'range': [-20, 20]},
-                'bar': {'color': "darkblue"},
-                'steps': [
-                    {'range': [-20, -5], 'color': "red"},
-                    {'range': [-5, 5], 'color': "yellow"},
-                    {'range': [5, 20], 'color': "green"}
-                ],
-                'threshold': {
-                    'line': {'color': "white", 'width': 4},
-                    'thickness': 0.75,
-                    'value': sentiment_score
-                }
-            }
-        ))
-        fig.update_layout(template="plotly_dark", height=250)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Volume Health
-        volume_health = df_filtered['volume_marketcap_ratio'].mean() * 100 if len(df_filtered) > 0 else 0
-        volume_health = min(max(volume_health, 0), 10)  # Batasi antara 0-10
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=volume_health,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Kesehatan Volume"},
-            gauge={
-                'axis': {'range': [0, 10]},
-                'bar': {'color': "darkgreen"},
-                'steps': [
-                    {'range': [0, 3], 'color': "red"},
-                    {'range': [3, 7], 'color': "yellow"},
-                    {'range': [7, 10], 'color': "green"}
-                ]
-            }
-        ))
-        fig.update_layout(template="plotly_dark", height=250)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col3:
-        # Risk Distribution
-        if len(df_filtered) > 0:
-            risk_counts = df_filtered['category'].value_counts()
-            fig = px.pie(
-                values=risk_counts.values,
-                names=risk_counts.index,
-                hole=0.5,
-                color_discrete_sequence=px.colors.sequential.RdBu,
-                template="plotly_dark"
-            )
-            fig.update_layout(
-                title="Distribusi Kapitalisasi",
-                showlegend=True,
-                height=250
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Tidak ada data yang sesuai dengan filter")
-
-# =====================
-# TAB 2: TOP PERFORMERS
-# =====================
-with tab2:
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🏆 Top 10 Market Cap")
-        top_10 = df.nsmallest(10, "market_cap_rank")
+        st.subheader("🗺️ Dominasi Pasar - Top 30")
+        st.markdown("💡 **Cara baca**: Ukuran kotak = nilai pasar, Warna = naik/hijau, turun/merah")
         
-        # Format untuk display
-        display_df = top_10[['symbol', 'name', 'market_cap', 'current_price', 
-                           'price_change_percentage_24h']].copy()
-        display_df['market_cap'] = display_df['market_cap'].apply(lambda x: f"${x:,.0f}")
-        display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:,.2f}")
-        display_df['price_change_percentage_24h'] = display_df['price_change_percentage_24h'].apply(
-            lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
-        
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
-        # Visual bar chart
-        fig = px.bar(
-            top_10,
-            x="symbol",
-            y="market_cap",
-            color="price_change_percentage_24h",
-            text_auto=".2s",
-            color_continuous_scale="RdYlGn",
-            template="plotly_dark"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.subheader("📈 Top Gainers vs Losers (24 Jam)")
-        
-        if len(df_filtered) > 0:
-            # Top gainers
-            top_5 = df_filtered.nlargest(5, "price_change_percentage_24h")
-            bot_5 = df_filtered.nsmallest(5, "price_change_percentage_24h")
-            combo = pd.concat([top_5, bot_5])
-            
-            # Display table
-            gainers_df = combo[['symbol', 'name', 'price_change_percentage_24h', 
-                              'current_price', 'market_cap']].copy()
-            gainers_df['price_change_percentage_24h'] = gainers_df['price_change_percentage_24h'].apply(
-                lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
-            gainers_df['current_price'] = gainers_df['current_price'].apply(lambda x: f"${x:,.2f}")
-            
-            st.dataframe(gainers_df, use_container_width=True, hide_index=True)
-            
-            # Visual chart
-            fig = px.bar(
-                combo,
-                x="price_change_percentage_24h",
-                y="symbol",
-                orientation="h",
+        top_30 = df_filtered.head(30)
+        if len(top_30) > 0:
+            fig = px.treemap(
+                top_30,
+                path=["category", "symbol"],
+                values="market_cap",
                 color="price_change_percentage_24h",
                 color_continuous_scale="RdYlGn",
+                color_continuous_midpoint=0,
                 template="plotly_dark",
-                labels={"price_change_percentage_24h": "Perubahan Harga (%)"}
+                hover_data=["current_price", "market_cap_rank"]
             )
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Tidak ada data yang sesuai dengan filter")
     
-    # Heatmap Performance
-    st.subheader("🎨 Heatmap Performa - Top 20 Koin")
-    
-    if len(df_filtered) > 0:
-        # Pilih 20 koin terbesar dalam filter
-        top_20 = df_filtered.nsmallest(20, "market_cap_rank")
+    with col2:
+        st.subheader("📊 Sebaran Perubahan Harga")
+        st.markdown("💡 **Cara baca**: Grafik menunjukkan berapa banyak koin naik/turun")
         
-        # Buat matriks performa
-        performance_metrics = ['price_change_percentage_24h', 'price_change_percentage_7d',
-                              'volatility_24h', 'volume_marketcap_ratio', 'fdv_mc_ratio']
-        
-        # Pastikan kolom ada dan tidak NaN
-        available_metrics = [m for m in performance_metrics if m in top_20.columns and not top_20[m].isna().all()]
-        
-        if available_metrics:
-            performance_df = top_20.set_index('symbol')[available_metrics]
+        if len(df_filtered) > 0:
+            # Buat kategori sederhana
+            df_filtered["change_category"] = pd.cut(
+                df_filtered["price_change_percentage_24h"],
+                bins=[-100, -10, -5, 0, 5, 10, 100],
+                labels=["Turun Banyak (>10%)", "Turun Sedang", "Turun Kecil", 
+                       "Naik Kecil", "Naik Sedang", "Naik Banyak (>10%)"]
+            )
             
-            # Rename columns untuk lebih user-friendly
-            metric_names = {
-                'price_change_percentage_24h': '24h Return',
-                'price_change_percentage_7d': '7d Return',
-                'volatility_24h': 'Volatility',
-                'volume_marketcap_ratio': 'Volume/MC Ratio',
-                'fdv_mc_ratio': 'FDV/MC Ratio'
-            }
-            performance_df.columns = [metric_names.get(col, col) for col in available_metrics]
-            
-            fig = px.imshow(performance_df.T,
-                            color_continuous_scale="RdYlGn",
-                            aspect="auto",
-                            template="plotly_dark",
-                            labels=dict(x="Kripto", y="Metrik", color="Nilai"))
-            fig.update_layout(height=400)
+            fig = px.bar(
+                df_filtered["change_category"].value_counts().sort_index(),
+                orientation="v",
+                color_discrete_sequence=['#1e88e5'],
+                template="plotly_dark",
+                labels={"value": "Jumlah Koin", "index": "Kategori Perubahan"}
+            )
+            fig.add_vline(x=2.5, line_dash="dash", line_color="white", annotation_text="Netral")
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Metrik performa tidak tersedia")
-    else:
-        st.info("Tidak ada data yang sesuai dengan filter")
-
-# =====================
-# TAB 3: DETAIL ANALISIS
-# =====================
-with tab3:
-    st.subheader("💰 Analisis Harga vs Market Cap")
     
-    if len(df_filtered) > 0:
-        # Scatter plot dengan kategori
-        scatter_data = df_filtered.head(100).copy()  # Batasi untuk visual yang lebih jelas
-        
-        fig = px.scatter(
-            scatter_data,
-            x="current_price",
-            y="market_cap",
-            log_x=True,
-            log_y=True,
-            color="category",
-            hover_name="name",
-            hover_data={
-                "price_change_percentage_24h": ":.2f%",
-                "volatility_24h": ":.3f",
-                "volume_marketcap_ratio": ":.3f",
-                "market_cap_rank": True,
-                "category": False
-            },
-            size="size_normalized",  # Gunakan size yang sudah dinormalisasi
-            template="plotly_dark",
-            labels={
-                "current_price": "Harga (log)",
-                "market_cap": "Market Cap (log)",
-                "category": "Kategori"
-            }
-        )
-        
-        # Tambah trendline
-        fig.update_traces(marker=dict(opacity=0.7))
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Ukuran bubble: Volume Trading | Warna: Kategori Market Cap")
-    else:
-        st.info("Tidak ada data yang sesuai dengan filter")
+    # ROW 2: Market Health Indicators - SEDERHANAKAN
+    st.subheader("❤️ Kesehatan Pasar")
     
-    # Correlation Matrix
-    st.subheader("🔗 Matriks Korelasi")
-    
-    if len(df_filtered) > 0:
-        numeric_cols = ['current_price', 'market_cap', 'total_volume', 
-                       'price_change_percentage_24h', 'volatility_24h',
-                       'volume_marketcap_ratio', 'fdv_mc_ratio']
-        
-        # Hanya ambil kolom yang ada
-        available_numeric = [col for col in numeric_cols if col in df_filtered.columns]
-        
-        if len(available_numeric) > 1:
-            corr_df = df_filtered[available_numeric].corr()
-            
-            fig = px.imshow(corr_df,
-                            color_continuous_scale="RdBu",
-                            zmin=-1, zmax=1,
-                            text_auto=".2f",
-                            template="plotly_dark",
-                            title="Korelasi antar Variabel")
-            fig.update_layout(height=500)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Tidak cukup data numerik untuk korelasi")
-    else:
-        st.info("Tidak ada data yang sesuai dengan filter")
-    
-    # Summary Table
-    st.subheader("📋 Ringkasan Data")
-    
-    if len(df_filtered) > 0:
-        summary_cols = ['name', 'symbol', 'current_price', 'price_change_percentage_24h',
-                       'market_cap', 'volatility_24h', 'category']
-        
-        # Hanya ambil kolom yang ada
-        available_summary = [col for col in summary_cols if col in df_filtered.columns]
-        
-        summary_df = df_filtered.head(20)[available_summary].copy()
-        
-        # Formatting
-        if 'current_price' in summary_df.columns:
-            summary_df['current_price'] = summary_df['current_price'].apply(lambda x: f"${x:,.2f}")
-        
-        if 'price_change_percentage_24h' in summary_df.columns:
-            summary_df['price_change_percentage_24h'] = summary_df['price_change_percentage_24h'].apply(
-                lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
-        
-        if 'market_cap' in summary_df.columns:
-            summary_df['market_cap'] = summary_df['market_cap'].apply(lambda x: f"${x:,.0f}")
-        
-        if 'volatility_24h' in summary_df.columns:
-            summary_df['volatility_24h'] = summary_df['volatility_24h'].apply(lambda x: f"{x:.2%}")
-        
-        # Color code the price change
-        def color_price_change(val):
-            if isinstance(val, str) and '+' in val:
-                return 'color: green'
-            elif isinstance(val, str) and '-' in val:
-                return 'color: red'
-            return ''
-        
-        if 'price_change_percentage_24h' in summary_df.columns:
-            styled_df = summary_df.style.applymap(color_price_change, 
-                                                  subset=['price_change_percentage_24h'])
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
-        else:
-            st.dataframe(summary_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("Tidak ada data yang sesuai dengan filter")
-
-# =====================
-# TAB 4: RISK ASSESSMENT
-# =====================
-with tab4:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("⚠️ Indikator Risiko Pasar")
-        
-        # Hitung risk score komposit
+        # Market Sentiment - Sederhana
         if len(df_filtered) > 0:
-            volatility_risk = df_filtered['volatility_24h'].mean() * 100
-            sentiment_risk = (df_filtered['price_change_percentage_24h'] < 0).mean() * 100
-            inflation_risk = df_filtered['supply_inflation_risk'].mean() * 100 if 'supply_inflation_risk' in df_filtered.columns else 0
+            sentiment_score = df_filtered['price_change_percentage_24h'].mean()
+            emoji, label, color = get_sentiment_emoji(sentiment_score)
             
-            risk_score = (volatility_risk * 0.4 + sentiment_risk * 0.3 + inflation_risk * 0.3)
-            risk_score = min(max(risk_score, 0), 100)  # Pastikan antara 0-100
-            
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=risk_score,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Tingkat Risiko Pasar", 'font': {'size': 20}},
-                delta={'reference': 50},
-                gauge={
-                    'axis': {'range': [0, 100]},
-                    'bar': {'color': "darkblue"},
-                    'steps': [
-                        {'range': [0, 30], 'color': "green"},
-                        {'range': [30, 70], 'color': "yellow"},
-                        {'range': [70, 100], 'color': "red"}
-                    ],
-                    'threshold': {
-                        'line': {'color': "white", 'width': 4},
-                        'thickness': 0.75,
-                        'value': risk_score
-                    }
-                }
-            ))
-            
-            fig.update_layout(
-                template="plotly_dark",
-                height=350,
-                margin=dict(l=20, r=20, t=50, b=20)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Risk breakdown
-            st.markdown("**Breakdown Risiko:**")
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.metric("Volatilitas", f"{volatility_risk:.1f}")
-            with col_b:
-                st.metric("Sentimen", f"{sentiment_risk:.1f}")
-            with col_c:
-                st.metric("Inflation", f"{inflation_risk:.1f}")
-        else:
-            st.info("Tidak ada data untuk kalkulasi risiko")
+            st.markdown(f"""
+            <div class="risk-box" style="border-left: 5px solid {color};">
+                <h3>{emoji}</h3>
+                <h1>{label}</h1>
+                <p>Perubahan rata-rata: <b>{sentiment_score:+.1f}%</b></p>
+                <p style="font-size: 12px; color: #aaa;">{len(df_filtered)} koin dianalisis</p>
+            </div>
+            """, unsafe_allow_html=True)
     
     with col2:
-        st.subheader("📊 Distribusi Risiko per Kategori")
-        
-        if len(df_filtered) > 0 and 'category' in df_filtered.columns:
-            # Hitung risk metrics per kategori
-            risk_metrics = df_filtered.groupby('category').agg({
-                'volatility_24h': 'mean',
-                'price_change_percentage_24h': lambda x: (x < 0).mean() if len(x) > 0 else 0,
-                'supply_inflation_risk': 'mean' if 'supply_inflation_risk' in df_filtered.columns else None
-            }).reset_index()
-            
-            # Hapus kolom yang tidak ada
-            risk_metrics = risk_metrics.dropna(axis=1, how='all')
-            
-            if len(risk_metrics) > 0:
-                # Normalisasi untuk radar chart
-                numeric_cols = risk_metrics.select_dtypes(include=[np.number]).columns.tolist()
-                for col in numeric_cols:
-                    min_val = risk_metrics[col].min()
-                    max_val = risk_metrics[col].max()
-                    if max_val > min_val:  # Hindari pembagian dengan nol
-                        risk_metrics[col] = (risk_metrics[col] - min_val) / (max_val - min_val)
-                
-                # Buat radar chart
-                categories = risk_metrics['category'].tolist()
-                metrics = [col for col in numeric_cols]
-                
-                fig = go.Figure()
-                
-                for idx, row in risk_metrics.iterrows():
-                    values = [row[col] for col in metrics]
-                    fig.add_trace(go.Scatterpolar(
-                        r=values,
-                        theta=metrics,
-                        fill='toself',
-                        name=row['category']
-                    ))
-                
-                fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 1]
-                        )),
-                    showlegend=True,
-                    template="plotly_dark",
-                    height=400
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
+        # Market Stability - Sederhana
+        if len(df_filtered) > 0:
+            volatility_avg = df_filtered['volatility_24h'].mean() * 100
+            if volatility_avg < 5:
+                stability = "🟢 Stabil"
+                stability_desc = "Fluktuasi harga rendah"
+                stability_color = "#00cc00"
+            elif volatility_avg < 15:
+                stability = "🟡 Normal"
+                stability_desc = "Fluktuasi harga wajar"
+                stability_color = "#ffcc00"
             else:
-                st.info("Tidak cukup data untuk radar chart")
-        else:
-            st.info("Data kategori tidak tersedia")
+                stability = "🔴 Volatil"
+                stability_desc = "Fluktuasi harga tinggi"
+                stability_color = "#ff3333"
+            
+            st.markdown(f"""
+            <div class="risk-box" style="border-left: 5px solid {stability_color};">
+                <h3>{stability.split()[0]}</h3>
+                <h1>{stability.split()[1]}</h1>
+                <p>Volatilitas: <b>{volatility_avg:.1f}%</b></p>
+                <p style="font-size: 12px; color: #aaa;">{stability_desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
     
-    # High Risk Coins
-    st.subheader("🔴 Koin dengan Risiko Tinggi")
+    # TIPS BOX
+    st.markdown("""
+    <div class="tip-box">
+        <h4>💡 Tips untuk Hari Ini:</h4>
+        <ol>
+            <li><b>Market Cap Rank 1-20</b>: Pilihan aman untuk pemula</li>
+            <li><b>Cek volume trading</b>: Pastikan > 0.05 untuk likuiditas baik</li>
+            <li><b>Diversifikasi</b>: Jangan fokus pada 1 koin saja</li>
+            <li><b>Pelajari dulu</b>: Mulai dengan jumlah kecil untuk belajar</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =====================
+# TAB 2: TOP PERFORMERS - DIPERBAIKI
+# =====================
+with tab2:
+    st.subheader("🏆 Pemain Terbaik Hari Ini")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📈 Top 5 Naik Terbanyak")
+        
+        if len(df_filtered) > 0:
+            top_gainers = df_filtered.nlargest(5, "price_change_percentage_24h").copy()
+            
+            # Format untuk display
+            display_gainers = top_gainers[['symbol', 'name', 'price_change_percentage_24h', 
+                                         'current_price', 'market_cap_rank']].copy()
+            display_gainers['price_change'] = display_gainers['price_change_percentage_24h'].apply(
+                lambda x: f"{'+' if x > 0 else ''}{x:.1f}%")
+            display_gainers['current_price'] = display_gainers['current_price'].apply(
+                lambda x: f"${x:,.2f}")
+            display_gainers['Rank'] = display_gainers['market_cap_rank']
+            
+            display_gainers = display_gainers[['symbol', 'name', 'price_change', 
+                                             'current_price', 'Rank']]
+            
+            # Tampilkan dengan warna
+            for _, row in display_gainers.iterrows():
+                with st.container():
+                    col_a, col_b, col_c = st.columns([1, 2, 2])
+                    with col_a:
+                        st.markdown(f"**{row['symbol']}**")
+                    with col_b:
+                        st.markdown(f"<span style='color: green; font-weight: bold;'>{row['price_change']}</span>", 
+                                  unsafe_allow_html=True)
+                    with col_c:
+                        st.markdown(f"{row['current_price']}")
+            
+            # Bar chart sederhana
+            fig = px.bar(
+                top_gainers,
+                x="symbol",
+                y="price_change_percentage_24h",
+                color="price_change_percentage_24h",
+                color_continuous_scale="greens",
+                template="plotly_dark",
+                labels={"price_change_percentage_24h": "Kenaikan (%)", "symbol": "Koin"}
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.markdown("### 📉 Top 5 Turun Terbanyak")
+        
+        if len(df_filtered) > 0:
+            top_losers = df_filtered.nsmallest(5, "price_change_percentage_24h").copy()
+            
+            # Format untuk display
+            display_losers = top_losers[['symbol', 'name', 'price_change_percentage_24h', 
+                                       'current_price', 'market_cap_rank']].copy()
+            display_losers['price_change'] = display_losers['price_change_percentage_24h'].apply(
+                lambda x: f"{x:.1f}%")
+            display_losers['current_price'] = display_losers['current_price'].apply(
+                lambda x: f"${x:,.2f}")
+            display_losers['Rank'] = display_losers['market_cap_rank']
+            
+            display_losers = display_losers[['symbol', 'name', 'price_change', 
+                                           'current_price', 'Rank']]
+            
+            # Tampilkan dengan warna
+            for _, row in display_losers.iterrows():
+                with st.container():
+                    col_a, col_b, col_c = st.columns([1, 2, 2])
+                    with col_a:
+                        st.markdown(f"**{row['symbol']}**")
+                    with col_b:
+                        st.markdown(f"<span style='color: red; font-weight: bold;'>{row['price_change']}</span>", 
+                                  unsafe_allow_html=True)
+                    with col_c:
+                        st.markdown(f"{row['current_price']}")
+            
+            # Bar chart sederhana
+            fig = px.bar(
+                top_losers,
+                x="symbol",
+                y="price_change_percentage_24h",
+                color="price_change_percentage_24h",
+                color_continuous_scale="reds",
+                template="plotly_dark",
+                labels={"price_change_percentage_24h": "Penurunan (%)", "symbol": "Koin"}
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # PERBANDINGAN PERFORMANCE
+    st.subheader("📊 Perbandingan Performa - Top 10")
     
     if len(df_filtered) > 0:
-        # Hitung risk score untuk setiap koin
-        df_filtered['risk_score_temp'] = (
-            df_filtered['volatility_24h'].rank(pct=True) * 0.4 +
-            (df_filtered['price_change_percentage_24h'] < 0).astype(int) * 0.3
+        top_10 = df_filtered.nsmallest(10, "market_cap_rank").copy()
+        
+        # Buat chart side-by-side yang mudah dibaca
+        metrics = {
+            'price_change_percentage_24h': 'Perubahan 24h (%)',
+            'volatility_24h': 'Volatilitas (%)'
+        }
+        
+        fig = go.Figure()
+        
+        # Tambah bar untuk perubahan harga
+        fig.add_trace(go.Bar(
+            name='Perubahan Harga',
+            x=top_10['symbol'],
+            y=top_10['price_change_percentage_24h'],
+            marker_color=['green' if x > 0 else 'red' for x in top_10['price_change_percentage_24h']],
+            yaxis='y'
+        ))
+        
+        # Tambah line untuk volatilitas
+        fig.add_trace(go.Scatter(
+            name='Volatilitas',
+            x=top_10['symbol'],
+            y=top_10['volatility_24h'] * 100,
+            mode='lines+markers',
+            line=dict(color='yellow', width=2),
+            yaxis='y2'
+        ))
+        
+        fig.update_layout(
+            title="Perubahan Harga vs Volatilitas",
+            yaxis=dict(title="Perubahan Harga (%)"),
+            yaxis2=dict(title="Volatilitas (%)", overlaying="y", side="right"),
+            template="plotly_dark",
+            height=400,
+            showlegend=True
         )
         
-        # Tambah supply inflation risk jika ada
-        if 'supply_inflation_risk' in df_filtered.columns:
-            df_filtered['risk_score_temp'] += df_filtered['supply_inflation_risk'].rank(pct=True) * 0.3
+        st.plotly_chart(fig, use_container_width=True)
         
-        high_risk = df_filtered.nlargest(10, 'risk_score_temp')[['symbol', 'name', 'risk_score_temp', 
-                                                               'volatility_24h', 
-                                                               'price_change_percentage_24h',
-                                                               'category']].copy()
-        
-        high_risk['risk_score'] = high_risk['risk_score_temp'].apply(lambda x: f"{x:.1%}")
-        high_risk['volatility_24h'] = high_risk['volatility_24h'].apply(lambda x: f"{x:.2%}")
-        high_risk['price_change_percentage_24h'] = high_risk['price_change_percentage_24h'].apply(
-            lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
-        
-        # Hapus kolom temporary
-        high_risk = high_risk.drop('risk_score_temp', axis=1)
-        
-        st.dataframe(high_risk, use_container_width=True, hide_index=True)
-    else:
-        st.info("Tidak ada data untuk analisis risiko")
+        st.caption("💡 **Biru/Hijau** = harga naik, **Merah** = harga turun, **Garis kuning** = tingkat fluktuasi")
+
+# =====================
+# TAB 3: DETAIL ANALISIS - DIPERBAIKI
+# =====================
+with tab3:
+    st.subheader("🔍 Analisis Detail Koin")
     
-    # Risk Factors Explanation
-    with st.expander("📖 Faktor Risiko yang Diperhitungkan"):
+    # Pilih koin untuk analisis detail
+    coin_list = df_filtered['symbol'].tolist()
+    if coin_list:
+        selected_coin = st.selectbox("🎯 Pilih koin untuk analisis detail:", coin_list[:50])
+        
+        # Tampilkan detail koin
+        coin_data = df_filtered[df_filtered['symbol'] == selected_coin].iloc[0]
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown(f"""
+            <div style="background-color: #1e1e1e; padding: 15px; border-radius: 10px;">
+                <h4>💰 Harga</h4>
+                <h2>${coin_data['current_price']:,.2f}</h2>
+                <p style="color: {'green' if coin_data['price_change_percentage_24h'] > 0 else 'red'};">
+                    {('+' if coin_data['price_change_percentage_24h'] > 0 else '')}{coin_data['price_change_percentage_24h']:.2f}% (24h)
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div style="background-color: #1e1e1e; padding: 15px; border-radius: 10px;">
+                <h4>🏆 Peringkat</h4>
+                <h2>#{coin_data['market_cap_rank']}</h2>
+                <p>Kategori: {coin_data['category']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div style="background-color: #1e1e1e; padding: 15px; border-radius: 10px;">
+                <h4>📊 Aktivitas</h4>
+                <p>Volume/Market Cap: {coin_data['volume_marketcap_ratio']:.4f}</p>
+                <p>Volatilitas: {coin_data['volatility_24h']:.2%}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # SCATTER PLOT dengan penjelasan
+        st.subheader("📈 Posisi di Pasar")
+        
         st.markdown("""
-        **1. Volatilitas (40%)**
-        - Mengukur fluktuasi harga dalam 24 jam
-        - Semakin tinggi volatilitas, semakin tinggi risiko
+        <div class="insight-box">
+            <h4>🎯 Cara Membaca Grafik:</h4>
+            <ul>
+                <li><b>Kanan Atas</b>: Koin besar & mahal (contoh: Bitcoin)</li>
+                <li><b>Kiri Bawah</b>: Koin kecil & murah</li>
+                <li><b>Ukuran Bulatan</b>: Volume trading (besar = aktif)</li>
+                <li><b>Warna</b>: Biru=Big Cap, Hijau=Mid Cap, Merah=Small Cap</li>
+                <li><b>Bintang</b>: Koin yang Anda pilih</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
         
-        **2. Sentimen Pasar (30%)**
-        - Proporsi koin dengan harga turun dalam 24 jam
-        - Indikator tekanan jual di pasar
+        if len(df_filtered) > 0:
+            scatter_data = df_filtered.head(100).copy()
+            
+            # Tandai koin yang dipilih
+            scatter_data['selected'] = scatter_data['symbol'] == selected_coin
+            
+            fig = px.scatter(
+                scatter_data,
+                x="current_price",
+                y="market_cap",
+                log_x=True,
+                log_y=True,
+                color="category",
+                hover_name="name",
+                hover_data={
+                    "price_change_percentage_24h": ":.2f%",
+                    "volatility_24h": ":.2%",
+                    "volume_marketcap_ratio": ":.4f",
+                    "market_cap_rank": True,
+                    "category": False,
+                    "selected": False
+                },
+                size="size_normalized",
+                template="plotly_dark",
+                labels={
+                    "current_price": "Harga (USD)",
+                    "market_cap": "Market Cap",
+                    "category": "Kategori"
+                },
+                symbol="selected",
+                symbol_map={True: "star", False: "circle"},
+                size_max=20
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.caption("💡 **Tips**: Arahkan mouse ke bulatan untuk info detail")
+    
+    # COMPARISON TOOL
+    st.subheader("⚖️ Bandingkan 2 Koin")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        coin1 = st.selectbox("Pilih koin pertama:", coin_list[:30] if coin_list else [], key="coin1")
+    
+    with col2:
+        coin2 = st.selectbox("Pilih koin kedua:", coin_list[:30] if coin_list else [], key="coin2")
+    
+    if coin1 and coin2 and coin1 != coin2:
+        coin1_data = df_filtered[df_filtered['symbol'] == coin1].iloc[0]
+        coin2_data = df_filtered[df_filtered['symbol'] == coin2].iloc[0]
         
-        **3. Risiko Inflasi (30%)**
-        - Potensi penambahan supply koin
-        - Semakin tinggi supply inflation risk, semakin tinggi risiko pengenceran
+        comparison_df = pd.DataFrame({
+            'Metrik': ['Harga', 'Perubahan 24h', 'Peringkat', 'Volatilitas', 'Volume/MC Ratio'],
+            coin1: [
+                f"${coin1_data['current_price']:,.2f}",
+                f"{coin1_data['price_change_percentage_24h']:+.2f}%",
+                f"#{coin1_data['market_cap_rank']}",
+                f"{coin1_data['volatility_24h']:.2%}",
+                f"{coin1_data['volume_marketcap_ratio']:.4f}"
+            ],
+            coin2: [
+                f"${coin2_data['current_price']:,.2f}",
+                f"{coin2_data['price_change_percentage_24h']:+.2f}%",
+                f"#{coin2_data['market_cap_rank']}",
+                f"{coin2_data['volatility_24h']:.2%}",
+                f"{coin2_data['volume_marketcap_ratio']:.4f}"
+            ]
+        })
+        
+        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+
+# =====================
+# TAB 4: RISK ASSESSMENT - DIPERBAIKI
+# =====================
+with tab4:
+    st.subheader("⚠️ Analisis Risiko")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 🎯 Skor Risiko Pasar")
+        
+        if len(df_filtered) > 0:
+            # Hitung risk score komposit
+            volatility_risk = df_filtered['volatility_24h'].mean() * 100
+            sentiment_risk = (df_filtered['price_change_percentage_24h'] < 0).mean() * 100
+            risk_score = min(max((volatility_risk * 0.6 + sentiment_risk * 0.4), 0), 100)
+            
+            # Tentukan level risiko
+            risk_level, risk_desc, risk_color = get_risk_level(risk_score)
+            
+            st.markdown(f"""
+            <div class="risk-box" style="border-left: 5px solid {risk_color};">
+                <h2>{risk_level}</h2>
+                <h1>{risk_score:.0f}/100</h1>
+                <p>{risk_desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Progress bar sederhana
+            st.markdown(f"""
+            <div style="margin-top: 20px;">
+                <p><b>Tingkat Risiko:</b></p>
+                <div style="background: linear-gradient(90deg, #00cc00 0%, #ffcc00 30%, #ff3333 100%); 
+                            height: 20px; border-radius: 10px; margin: 10px 0;">
+                    <div style="width: {risk_score}%; height: 100%; background-color: rgba(255,255,255,0.3); 
+                                border-radius: 10px;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                    <span>🟢 Rendah</span>
+                    <span>🟡 Sedang</span>
+                    <span>🔴 Tinggi</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Detail risk components
+            st.markdown("**Komponen Risiko:**")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("📊 Volatilitas", f"{volatility_risk:.1f}")
+                st.progress(min(volatility_risk/50, 1.0))
+            with col_b:
+                st.metric("📈 Sentimen", f"{sentiment_risk:.1f}")
+                st.progress(min(sentiment_risk/100, 1.0))
+    
+    with col2:
+        st.markdown("### 📋 Koin dengan Risiko Tinggi")
+        
+        if len(df_filtered) > 0:
+            # Identifikasi koin berisiko tinggi
+            risk_criteria = (
+                (df_filtered['volatility_24h'] > df_filtered['volatility_24h'].quantile(0.75)) &
+                (df_filtered['price_change_percentage_24h'] < 0)
+            )
+            high_risk_coins = df_filtered[risk_criteria].head(5)
+            
+            if len(high_risk_coins) > 0:
+                st.markdown("⚠️ **Koin ini memiliki risiko tinggi karena:**")
+                st.markdown("- Volatilitas di atas rata-rata")
+                st.markdown("- Harga sedang turun")
+                
+                for _, coin in high_risk_coins.iterrows():
+                    with st.container():
+                        st.markdown(f"""
+                        <div style="background-color: #2d1e1e; padding: 10px; border-radius: 5px; 
+                                    border-left: 3px solid #ff3333; margin: 5px 0;">
+                            <b>{coin['symbol']}</b> - {coin['name']}
+                            <div style="font-size: 12px;">
+                                Volatilitas: <span style="color: orange;">{coin['volatility_24h']:.2%}</span> | 
+                                Perubahan: <span style="color: red;">{coin['price_change_percentage_24h']:.1f}%</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("🎉 Tidak ada koin dengan risiko tinggi dalam filter ini!")
+    
+    # SAFE COINS RECOMMENDATION
+    st.subheader("🛡️ Rekomendasi untuk Pemula")
+    
+    if len(df_filtered) > 0:
+        # Koin dengan risiko rendah
+        safe_criteria = (
+            (df_filtered['market_cap_rank'] <= 50) &  # Top 50 by market cap
+            (df_filtered['volatility_24h'] < df_filtered['volatility_24h'].quantile(0.25)) &  # Low volatility
+            (df_filtered['volume_marketcap_ratio'] > 0.01)  # Good liquidity
+        )
+        safe_coins = df_filtered[safe_criteria].head(10)
+        
+        if len(safe_coins) > 0:
+            st.markdown("**✅ Koin yang relatif aman untuk pemula:**")
+            
+            # Tampilkan dalam grid
+            cols = st.columns(3)
+            for idx, (_, coin) in enumerate(safe_coins.iterrows()):
+                with cols[idx % 3]:
+                    st.markdown(f"""
+                    <div style="background-color: #1e2d1e; padding: 10px; border-radius: 5px; 
+                                border-left: 3px solid #33cc33; margin: 5px 0;">
+                        <b>{coin['symbol']}</b>
+                        <div style="font-size: 12px;">
+                            Rank: #{coin['market_cap_rank']}<br>
+                            Vol: {coin['volatility_24h']:.2%}<br>
+                            Change: <span style="color: {'green' if coin['price_change_percentage_24h'] > 0 else 'red'}">
+                            {('+' if coin['price_change_percentage_24h'] > 0 else '')}{coin['price_change_percentage_24h']:.1f}%</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("Tidak ada koin yang memenuhi kriteria 'aman' dalam filter ini.")
+    
+    # RISK MANAGEMENT TIPS
+    with st.expander("📚 Tips Mengelola Risiko untuk Pemula", expanded=True):
+        st.markdown("""
+        **🎯 Strategi untuk Pemula:**
+        
+        1. **Mulai dengan Koin Besar**
+           - Bitcoin, Ethereum, dan koin top 20 lainnya
+           - Lebih stabil, likuiditas tinggi
+        
+        2. **Diversifikasi Portofolio**
+           - Jangan taruh semua dana di 1 koin
+           - Bagikan ke 3-5 koin berbeda
+        
+        3. **Tentukan Batas Rugi (Stop Loss)**
+           - Tentukan berapa persen kerugian yang bisa ditoleransi
+           - Contoh: Jual otomatis jika turun 10%
+        
+        4. **Pelajari Dulu, Baru Investasi Besar**
+           - Mulai dengan jumlah kecil untuk belajar
+           - Pahami pola pergerakan harga
+        
+        5. **Hindari FOMO (Fear of Missing Out)**
+           - Jangan terburu-buru ikut tren
+           - Riset sebelum membeli koin baru
+        """)
+
+# =====================
+# TAB 5: QUICK INSIGHTS (BARU) - UNTUK PEMULA
+# =====================
+with tab5:
+    st.header("🚀 Panduan Cepat untuk Pemula")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 5 Hal yang Harus Diketahui")
+        
+        insights = []
+        
+        # Insight 1: Market overview
+        if len(df_filtered) > 0:
+            avg_change = df_filtered['price_change_percentage_24h'].mean()
+            if avg_change > 2:
+                insights.append("**📈 Pasar Sedang Baik**: Rata-rata koin naik hari ini")
+            elif avg_change < -2:
+                insights.append("**📉 Pasar Sedang Turun**: Banyak koin merah hari ini")
+            else:
+                insights.append("**⚖️ Pasar Stabil**: Tidak banyak perubahan berarti")
+        
+        # Insight 2: Best performing category
+        if 'category' in df_filtered.columns:
+            cat_perf = df_filtered.groupby('category')['price_change_percentage_24h'].mean()
+            if not cat_perf.empty:
+                best_cat = cat_perf.idxmax()
+                insights.append(f"**🏆 Kategori Terbaik**: {best_cat} memberikan return terbaik")
+        
+        # Insight 3: Liquidity insight
+        avg_vol_ratio = df_filtered['volume_marketcap_ratio'].mean() if len(df_filtered) > 0 else 0
+        if avg_vol_ratio > 0.05:
+            insights.append("**💎 Likuiditas Tinggi**: Mudah beli/jual koin")
+        else:
+            insights.append("**⚠️ Likuiditas Rendah**: Hati-hati saat transaksi besar")
+        
+        # Insight 4: Top coin performance
+        if len(df_filtered) > 0:
+            top_coin = df_filtered.nsmallest(1, 'market_cap_rank').iloc[0]
+            insights.append(f"**👑 Koin Terbesar**: {top_coin['symbol']} dominasi pasar")
+        
+        # Insight 5: Risk level
+        if len(df_filtered) > 0:
+            volatility = df_filtered['volatility_24h'].mean() * 100
+            if volatility < 5:
+                insights.append("**🟢 Risiko Rendah**: Pasar tidak terlalu fluktuatif")
+            elif volatility < 15:
+                insights.append("**🟡 Risiko Normal**: Fluktuasi wajar untuk crypto")
+            else:
+                insights.append("**🔴 Risiko Tinggi**: Pasar sangat volatil")
+        
+        # Tampilkan insights
+        for i, insight in enumerate(insights[:5], 1):
+            st.markdown(f"{i}. {insight}")
+    
+    with col2:
+        st.subheader("💡 5 Langkah Memulai")
+        
+        st.markdown("""
+        <div class="tip-box">
+        <ol>
+        <li><b>Pilih Koin Besar</b><br>
+        Mulai dari Bitcoin, Ethereum, atau koin top 10 lainnya</li><br>
+        
+        <li><b>Cek Volume Trading</b><br>
+        Pastikan Volume/MC Ratio > 0.01</li><br>
+        
+        <li><b>Perhatikan Peringkat</b><br>
+        Market cap rank menunjukkan ukuran dan stabilitas</li><br>
+        
+        <li><b>Mulai dengan Kecil</b><br>
+        Investasi kecil dulu untuk belajar dan pahami pola</li><br>
+        
+        <li><b>Pantau Secara Rutin</b><br>
+        Gunakan dashboard ini untuk monitoring harian</li>
+        </ol>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # QUICK COMPARISON: CRYPTO vs TRADITIONAL ASSETS
+    st.subheader("⚖️ Perbandingan: Crypto vs Aset Tradisional")
+    
+    comparison_data = {
+        'Aset': ['Bitcoin (Crypto)', 'Saham Blue Chip', 'Emas', 'Deposito Bank'],
+        'Risiko': ['Tinggi', 'Sedang', 'Rendah', 'Sangat Rendah'],
+        'Potensi Return': ['Sangat Tinggi', 'Tinggi', 'Rendah', 'Sangat Rendah'],
+        'Likuiditas': ['Tinggi', 'Tinggi', 'Sedang', 'Rendah'],
+        'Cocok untuk': ['Investor Berpengalaman', 'Investor Umum', 'Investor Konservatif', 'Penyimpan Dana']
+    }
+    
+    comparison_df = pd.DataFrame(comparison_data)
+    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+    
+    # PERSONALIZED RECOMMENDATION
+    st.subheader("🎯 Rekomendasi Personal")
+    
+    experience_level = st.select_slider(
+        "Tingkat Pengalaman Anda:",
+        options=["Pemula Total", "Sudah Coba-Coba", "Cukup Berpengalaman", "Expert"]
+    )
+    
+    if experience_level == "Pemula Total":
+        st.success("""
+        **🎯 Rekomendasi untuk Anda:**
+        
+        1. **Fokus pada**: Bitcoin, Ethereum, BNB (koin top 10)
+        2. **Alokasi**: 70% koin besar, 30% koin mid-cap
+        3. **Strategi**: Beli dan tahan (hold), hindari trading harian
+        4. **Risiko**: Batasi maksimal 5-10% dari total portofolio Anda
+        """)
+    elif experience_level == "Sudah Coba-Coba":
+        st.success("""
+        **🎯 Rekomendasi untuk Anda:**
+        
+        1. **Fokus pada**: Koin top 50 dengan volume tinggi
+        2. **Alokasi**: 50% big cap, 30% mid cap, 20% small cap pilihan
+        3. **Strategi**: Bisa mulai trading swing (beberapa hari/minggu)
+        4. **Risiko**: Maksimal 10-15% dari total portofolio
+        """)
+    elif experience_level == "Cukup Berpengalaman":
+        st.success("""
+        **🎯 Rekomendasi untuk Anda:**
+        
+        1. **Fokus pada**: Semua kategori dengan riset mendalam
+        2. **Alokasi**: Sesuaikan dengan risk appetite dan analisis
+        3. **Strategi**: Bisa trading harian dengan risk management ketat
+        4. **Risiko**: Maksimal 20% dari total portofolio
+        """)
+    else:
+        st.success("""
+        **🎯 Anda sudah berpengalaman:**
+        
+        1. **Fokus pada**: Opportunity di semua segment
+        2. **Alokasi**: Diversifikasi + spesialisasi niche tertentu
+        3. **Strategi**: Advanced strategies dengan hedging
+        4. **Risiko**: Manage sesuai risk/reward ratio target
         """)
 
 # =====================
@@ -732,10 +951,18 @@ st.markdown("---")
 footer_col1, footer_col2, footer_col3 = st.columns(3)
 
 with footer_col1:
-    st.caption("📌 Data Visualization Project | Streamlit Dashboard")
+    st.caption("📌 Dashboard Crypto untuk Pemula | Streamlit")
 
 with footer_col2:
-    st.caption(f"🔄 Data diperbarui: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
+    st.caption(f"🔄 Data: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
 
 with footer_col3:
-    st.caption(f"🔍 Total data point: {len(df_filtered)}")
+    st.caption(f"🔍 {len(df_filtered)} koin ditampilkan")
+
+# FINAL TIP
+st.markdown("""
+<div style="text-align: center; padding: 20px; background-color: #1e1e1e; border-radius: 10px; margin-top: 20px;">
+    <h4>💎 Ingat: Crypto adalah aset berisiko tinggi</h4>
+    <p>Selalu riset sebelum investasi, jangan investasi lebih dari yang bisa Anda tanggung kerugiannya</p>
+</div>
+""", unsafe_allow_html=True)
