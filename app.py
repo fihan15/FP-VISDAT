@@ -209,28 +209,6 @@ st.markdown("""
         color: #f0f2f6 !important;
         border: 1px solid #2d3748 !important;
     }
-    
-    /* Progress bar - Dark mode */
-    .stProgress > div > div > div {
-        background: linear-gradient(90deg, #00d4ff, #0083ff) !important;
-    }
-    
-    /* Slider - Dark mode */
-    .stSlider > div > div > div {
-        background: #00d4ff !important;
-    }
-    
-    /* Selectbox - Dark mode */
-    .stSelectbox > div > div {
-        background: #1a202c !important;
-        color: #f0f2f6 !important;
-        border: 1px solid #2d3748 !important;
-    }
-    
-    /* Plotly chart background fix */
-    .js-plotly-plot {
-        background: transparent !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -240,32 +218,24 @@ st.markdown("""
 def get_dark_template():
     """Return plotly dark template configuration"""
     return {
-        'layout': {
-            'plot_bgcolor': 'rgba(26, 32, 44, 0.8)',
-            'paper_bgcolor': 'rgba(26, 32, 44, 0.8)',
-            'font': {'color': '#f0f2f6', 'family': 'Arial'},
-            'title': {'font': {'color': '#00d4ff'}},
-            'xaxis': {
-                'gridcolor': '#2d3748',
-                'linecolor': '#2d3748',
-                'zerolinecolor': '#2d3748',
-                'tickfont': {'color': '#a0aec0'}
-            },
-            'yaxis': {
-                'gridcolor': '#2d3748',
-                'linecolor': '#2d3748',
-                'zerolinecolor': '#2d3748',
-                'tickfont': {'color': '#a0aec0'}
-            },
-            'colorway': ['#00d4ff', '#0083ff', '#00ff88', '#ffaa00', '#ff5555'],
-        }
+        'plot_bgcolor': 'rgba(26, 32, 44, 0.8)',
+        'paper_bgcolor': 'rgba(26, 32, 44, 0.8)',
+        'font': {'color': '#f0f2f6', 'family': 'Arial'},
+        'title': {'font': {'color': '#00d4ff'}},
+        'xaxis': {
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        },
+        'yaxis': {
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        },
+        'colorway': ['#00d4ff', '#0083ff', '#00ff88', '#ffaa00', '#ff5555'],
     }
-
-def create_dark_figure():
-    """Create a figure with dark mode settings"""
-    fig = go.Figure()
-    fig.update_layout(**get_dark_template()['layout'])
-    return fig
 
 # =====================
 # LOAD DATA WITH SAMPLE FOR PRESENTATION
@@ -435,9 +405,11 @@ with col1:
         hover_data={'market_cap': ':.2s', 'current_price': ':.2f'},
     )
     
-    # Apply dark theme
+    # Apply dark theme - FIXED VERSION
     fig.update_layout(
-        **get_dark_template()['layout'],
+        plot_bgcolor='rgba(26, 32, 44, 0.8)',
+        paper_bgcolor='rgba(26, 32, 44, 0.8)',
+        font={'color': '#f0f2f6', 'family': 'Arial'},
         margin=dict(t=0, b=0, l=0, r=0)
     )
     
@@ -555,14 +527,14 @@ with col2:
     st.plotly_chart(fig, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Row 2: Top Performers
+# Row 2: Top Performers - FIXED VERSION
 st.markdown('<div class="chart-container">', unsafe_allow_html=True)
 st.markdown("### 🏆 Top Performers Analysis")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    # Top 5 Gainers
+    # Top 5 Gainers - FIXED UPDATE_LAYOUT
     top_gainers = df_processed.nlargest(5, 'price_change_percentage_24h')
     fig = px.bar(
         top_gainers,
@@ -573,18 +545,33 @@ with col1:
         text_auto='+.1f'
     )
     
+    # Apply layout settings individually - FIXED
     fig.update_layout(
-        **get_dark_template()['layout'],
+        plot_bgcolor='rgba(26, 32, 44, 0.8)',
+        paper_bgcolor='rgba(26, 32, 44, 0.8)',
+        font={'color': '#f0f2f6', 'family': 'Arial'},
         showlegend=False,
         yaxis_title="Price Change %",
         xaxis_title="",
-        title="🚀 Top 5 Gainers (24h)"
+        title={'text': "🚀 Top 5 Gainers (24h)", 'font': {'color': '#00d4ff'}},
+        xaxis={
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        },
+        yaxis={
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        }
     )
     
     st.plotly_chart(fig, use_container_width=True)
 
 with col2:
-    # Top 5 Losers
+    # Top 5 Losers - FIXED UPDATE_LAYOUT
     top_losers = df_processed.nsmallest(5, 'price_change_percentage_24h')
     fig = px.bar(
         top_losers,
@@ -595,12 +582,27 @@ with col2:
         text_auto='+.1f'
     )
     
+    # Apply layout settings individually - FIXED
     fig.update_layout(
-        **get_dark_template()['layout'],
+        plot_bgcolor='rgba(26, 32, 44, 0.8)',
+        paper_bgcolor='rgba(26, 32, 44, 0.8)',
+        font={'color': '#f0f2f6', 'family': 'Arial'},
         showlegend=False,
         yaxis_title="Price Change %",
         xaxis_title="",
-        title="📉 Top 5 Losers (24h)"
+        title={'text': "📉 Top 5 Losers (24h)", 'font': {'color': '#00d4ff'}},
+        xaxis={
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        },
+        yaxis={
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        }
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -636,11 +638,26 @@ with col1:
         }
     )
     
+    # Apply layout individually - FIXED
     fig.update_layout(
-        **get_dark_template()['layout'],
+        plot_bgcolor='rgba(26, 32, 44, 0.8)',
+        paper_bgcolor='rgba(26, 32, 44, 0.8)',
+        font={'color': '#f0f2f6', 'family': 'Arial'},
         xaxis_title="Price (Log Scale)",
         yaxis_title="Market Cap (Log Scale)",
-        legend_title="Market Cap Size"
+        legend_title="Market Cap Size",
+        xaxis={
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        },
+        yaxis={
+            'gridcolor': '#2d3748',
+            'linecolor': '#2d3748',
+            'zerolinecolor': '#2d3748',
+            'tickfont': {'color': '#a0aec0'}
+        }
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -681,18 +698,51 @@ with col2:
         row=2, col=1
     )
     
-    # Update layout with dark theme
-    dark_layout = get_dark_template()['layout']
+    # Update layout dengan dark theme - FIXED
     fig.update_layout(
         height=600,
-        **dark_layout,
-        showlegend=False
+        plot_bgcolor='rgba(26, 32, 44, 0.8)',
+        paper_bgcolor='rgba(26, 32, 44, 0.8)',
+        font={'color': '#f0f2f6', 'family': 'Arial'},
+        showlegend=False,
+        title_font_color='#00d4ff'
     )
     
-    fig.update_xaxes(title_text="Market Cap (Log10 $)", row=1, col=1)
-    fig.update_xaxes(title_text="24h Price Change %", row=2, col=1)
-    fig.update_yaxes(title_text="Count", row=1, col=1)
-    fig.update_yaxes(title_text="Count", row=2, col=1)
+    fig.update_xaxes(
+        title_text="Market Cap (Log10 $)",
+        row=1, col=1,
+        gridcolor='#2d3748',
+        linecolor='#2d3748',
+        zerolinecolor='#2d3748',
+        tickfont={'color': '#a0aec0'}
+    )
+    
+    fig.update_xaxes(
+        title_text="24h Price Change %",
+        row=2, col=1,
+        gridcolor='#2d3748',
+        linecolor='#2d3748',
+        zerolinecolor='#2d3748',
+        tickfont={'color': '#a0aec0'}
+    )
+    
+    fig.update_yaxes(
+        title_text="Count",
+        row=1, col=1,
+        gridcolor='#2d3748',
+        linecolor='#2d3748',
+        zerolinecolor='#2d3748',
+        tickfont={'color': '#a0aec0'}
+    )
+    
+    fig.update_yaxes(
+        title_text="Count",
+        row=2, col=1,
+        gridcolor='#2d3748',
+        linecolor='#2d3748',
+        zerolinecolor='#2d3748',
+        tickfont={'color': '#a0aec0'}
+    )
     
     # Add mean lines
     fig.add_vline(
@@ -700,7 +750,8 @@ with col2:
         row=1, col=1,
         line_dash="dash",
         line_color="#ff5555",
-        annotation_text=f"Mean: ${df_processed['market_cap'].mean():.2e}"
+        annotation_text=f"Mean: ${df_processed['market_cap'].mean():.2e}",
+        annotation_font_color="#ff5555"
     )
     
     fig.add_vline(
@@ -708,7 +759,8 @@ with col2:
         row=2, col=1,
         line_dash="dash",
         line_color="#ff5555",
-        annotation_text=f"Mean: {df_processed['price_change_percentage_24h'].mean():.1f}%"
+        annotation_text=f"Mean: {df_processed['price_change_percentage_24h'].mean():.1f}%",
+        annotation_font_color="#ff5555"
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -865,13 +917,29 @@ with col2:
         )
         
         fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        
+        # Apply layout individually - FIXED
         fig.update_layout(
-            **get_dark_template()['layout'],
+            plot_bgcolor='rgba(26, 32, 44, 0.8)',
+            paper_bgcolor='rgba(26, 32, 44, 0.8)',
+            font={'color': '#f0f2f6', 'family': 'Arial'},
             showlegend=False,
             height=300,
             xaxis_title="",
             yaxis_title="Avg Return %",
-            title="Average 24h Returns by Category"
+            title={'text': "Average 24h Returns by Category", 'font': {'color': '#00d4ff'}},
+            xaxis={
+                'gridcolor': '#2d3748',
+                'linecolor': '#2d3748',
+                'zerolinecolor': '#2d3748',
+                'tickfont': {'color': '#a0aec0'}
+            },
+            yaxis={
+                'gridcolor': '#2d3748',
+                'linecolor': '#2d3748',
+                'zerolinecolor': '#2d3748',
+                'tickfont': {'color': '#a0aec0'}
+            }
         )
         
         st.plotly_chart(fig, use_container_width=True)
