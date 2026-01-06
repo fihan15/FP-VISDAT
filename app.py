@@ -15,7 +15,7 @@ warnings.filterwarnings('ignore')
 st.set_page_config(
     page_title="📊 Crypto Market Intelligence Dashboard",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="collapsed",  # Sidebar collapsed untuk lebih fokus
     page_icon="📈"
 )
 
@@ -59,7 +59,6 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(0,0,0,0.08);
         border-left: 5px solid #667eea;
         transition: transform 0.3s ease;
-        margin-bottom: 15px;
     }
     
     .metric-card:hover {
@@ -112,6 +111,22 @@ st.markdown("""
         box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
     }
     
+    /* Button styling */
+    .stButton button {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 25px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+    
     /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -133,20 +148,20 @@ st.markdown("""
         border-left: 4px solid #ffc107;
     }
     
-    /* Risk level indicators */
-    .risk-low {
-        color: #28a745;
-        font-weight: 600;
+    /* Animation for highlights */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
     }
     
-    .risk-medium {
-        color: #ffc107;
-        font-weight: 600;
-    }
-    
-    .risk-high {
-        color: #dc3545;
-        font-weight: 600;
+    .highlight {
+        animation: pulse 2s infinite;
+        display: inline-block;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -159,7 +174,6 @@ def load_sample_data():
     """Load data dengan sample untuk presentasi"""
     try:
         df = pd.read_csv("crypto_top1000_dataset.csv")
-        st.success("✅ Real data loaded successfully")
     except:
         # Create sample data for presentation if file not found
         st.warning("⚠️ Using sample data for presentation")
@@ -170,65 +184,62 @@ def load_sample_data():
             'symbol': [f'CRYPTO{i:03d}' for i in range(n)],
             'market_cap': np.random.exponential(10000, n) * 1e6,
             'current_price': np.random.lognormal(0, 2, n),
-            'price_change_percentage_24h': np.random.normal(2, 15, n),  # Average 2% positive
+            'price_change_percentage_24h': np.random.normal(0, 15, n),
             'price_change_percentage_7d': np.random.normal(5, 20, n),
             'total_volume': np.random.exponential(1000, n) * 1e6,
             'market_cap_rank': range(1, n+1),
-            'high_24h': np.random.uniform(1.05, 1.15, n),
-            'low_24h': np.random.uniform(0.90, 0.98, n),
+            'high_24h': np.random.uniform(1.1, 2, n),
+            'low_24h': np.random.uniform(0.8, 0.95, n),
             'circulating_supply': np.random.exponential(1e6, n),
             'max_supply': np.random.exponential(2e6, n),
         }
         df = pd.DataFrame(data)
         df['volatility_24h'] = (df['high_24h'] - df['low_24h']) / df['current_price']
         df['volume_marketcap_ratio'] = df['total_volume'] / df['market_cap']
-        st.info("📊 Sample data generated for presentation")
     
     return df
 
 df = load_sample_data()
 
 # =====================
-# DATA PROCESSING FOR PRESENTATION
+# SIMPLE DATA PROCESSING FOR PRESENTATION
 # =====================
 def process_data_for_presentation(df):
     """Simple data processing yang mudah dipahami"""
     
+    # 1. Handle missing values secara sederhana
     df_clean = df.copy()
     
-    # 1. Handle missing values
+    # Isi missing values dengan median untuk numerik
     numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
     for col in numeric_cols:
         if df_clean[col].isnull().any():
             df_clean[col] = df_clean[col].fillna(df_clean[col].median())
     
-    # 2. Calculate essential metrics
-    df_clean['volatility_24h'] = (df_clean['high_24h'] - df_clean['low_24h']) / df_clean['current_price']
-    df_clean['volume_marketcap_ratio'] = df_clean['total_volume'] / df_clean['market_cap']
+    # 2. Simple outlier handling (cap extreme values)
+    for col in ['price_change_percentage_24h', 'price_change_percentage_7d']:
+        if col in df_clean.columns:
+            q1 = df_clean[col].quantile(0.05)
+            q3 = df_clean[col].quantile(0.95)
+            df_clean[col] = df_clean[col].clip(q1, q3)
     
-    # 3. Create market cap categories
+    # 3. Buat kategori sederhana
     df_clean['market_cap_category'] = pd.qcut(
         df_clean['market_cap'], 
         q=[0, 0.1, 0.5, 1], 
         labels=['Small Cap', 'Mid Cap', 'Large Cap']
     )
     
-    # 4. Format for display
+    # 4. Buat score sederhana untuk presentasi
+    if all(col in df_clean.columns for col in ['price_change_percentage_24h', 'volatility_24h']):
+        df_clean['performance_score'] = (
+            df_clean['price_change_percentage_24h'].rank(pct=True) * 0.7 -
+            df_clean['volatility_24h'].rank(pct=True) * 0.3
+        )
+    
+    # 5. Format currency untuk display
     df_clean['market_cap_formatted'] = df_clean['market_cap'].apply(
         lambda x: f'${x/1e9:.1f}B' if x >= 1e9 else f'${x/1e6:.0f}M'
-    )
-    
-    # 5. Calculate performance score
-    df_clean['performance_score'] = (
-        df_clean['price_change_percentage_24h'].rank(pct=True) * 0.7 -
-        df_clean['volatility_24h'].rank(pct=True) * 0.3
-    )
-    
-    # 6. Calculate risk score (FIXED VERSION)
-    df_clean['risk_score'] = (
-        df_clean['volatility_24h'].rank(pct=True) * 0.4 +
-        (df_clean['price_change_percentage_24h'] < 0).astype(float) * 0.3 +
-        (1 - df_clean['market_cap'].rank(pct=True)) * 0.3
     )
     
     return df_clean
@@ -284,8 +295,7 @@ with col3:
 with col4:
     with st.container():
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        top_10 = df_processed.nsmallest(10, 'market_cap_rank')
-        top_10_dominance = top_10['market_cap'].sum() / total_market_cap * 100
+        top_10_dominance = df_processed.nsmallest(10, 'market_cap_rank')['market_cap'].sum() / total_market_cap * 100
         st.metric(
             label="👑 **Top 10 Dominance**",
             value=f"{top_10_dominance:.1f}%",
@@ -357,12 +367,12 @@ with col2:
     ), row=1, col=1)
     
     # Gauge 2: Volatility
-    avg_vol = df_processed['volatility_24h'].mean() * 100
+    avg_vol = df_processed['volatility_24h'].mean() * 100 if 'volatility_24h' in df_processed.columns else 5
     fig.add_trace(go.Indicator(
         mode="gauge+number",
-        value=min(avg_vol, 20),  # Cap at 20% for better visualization
+        value=avg_vol,
         domain={'x': [0.55, 1], 'y': [0.5, 1]},
-        title={'text': "Avg Volatility"},
+        title={'text': "Avg Volatility %"},
         gauge={'axis': {'range': [0, 20]},
                'bar': {'color': "#dc3545"},
                'steps': [
@@ -373,12 +383,12 @@ with col2:
     ), row=1, col=2)
     
     # Gauge 3: Liquidity
-    avg_volume_ratio = df_processed['volume_marketcap_ratio'].mean() * 100
+    avg_volume_ratio = df_processed['volume_marketcap_ratio'].mean() * 100 if 'volume_marketcap_ratio' in df_processed.columns else 3
     fig.add_trace(go.Indicator(
         mode="gauge+number",
-        value=min(avg_volume_ratio * 10, 10),  # Scale for better visualization
+        value=avg_volume_ratio,
         domain={'x': [0, 0.45], 'y': [0, 0.5]},
-        title={'text': "Liquidity"},
+        title={'text': "Liquidity %"},
         gauge={'axis': {'range': [0, 10]},
                'bar': {'color': "#007bff"},
                'steps': [
@@ -394,7 +404,7 @@ with col2:
         mode="gauge+number",
         value=concentration,
         domain={'x': [0.55, 1], 'y': [0, 0.5]},
-        title={'text': "Top 10 Share"},
+        title={'text': "Top 10 Share %"},
         gauge={'axis': {'range': [0, 100]},
                'bar': {'color': "#6f42c1"},
                'steps': [
@@ -585,292 +595,127 @@ with col2:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================
-# RISK ASSESSMENT SECTION - FIXED VERSION
+# RISK ASSESSMENT SECTION
 # =====================
 st.markdown('<h2 class="section-header">⚠️ Risk Assessment & Opportunities</h2>', unsafe_allow_html=True)
 
-col1, col2 = st.columns([2, 1])
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.markdown("### ⚠️ Market Risk Indicators")
+    st.markdown("### 📊 Risk Distribution")
     
-    # Hitung risk metrics dengan cara yang benar
-    if len(df_processed) > 0:
-        # 1. Volatility Risk (0-100 scale)
-        volatility_raw = df_processed['volatility_24h'].abs().mean()
-        volatility_risk = min(volatility_raw * 500, 100)  # Scale to 0-100
-        
-        # 2. Market Sentiment Risk (0-100 scale)
-        negative_coins = (df_processed['price_change_percentage_24h'] < 0).sum()
-        sentiment_risk = (negative_coins / len(df_processed)) * 100
-        
-        # 3. Concentration Risk (0-100 scale)
-        top_5 = df_processed.nsmallest(5, 'market_cap_rank')
-        concentration_risk = (top_5['market_cap'].sum() / total_market_cap) * 100
-        
-        # 4. Composite Risk Score (weighted average) - FIXED
-        composite_risk = (
-            volatility_risk * 0.4 +      # 40% weight to volatility
-            sentiment_risk * 0.3 +       # 30% weight to sentiment
-            concentration_risk * 0.3      # 30% weight to concentration
-        )
-        
-        # Pastikan dalam range 0-100
-        composite_risk = min(max(composite_risk, 0), 100)
-        
-        # Determine risk level
-        if composite_risk < 30:
-            risk_level = "🟢 LOW"
-            risk_color = "#28a745"
-        elif composite_risk < 70:
-            risk_level = "🟡 MEDIUM"
-            risk_color = "#ffc107"
-        else:
-            risk_level = "🔴 HIGH"
-            risk_color = "#dc3545"
-        
-        # Buat gauge chart untuk composite risk
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=composite_risk,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': f"Market Risk Score: {risk_level}", 'font': {'size': 24}},
-            number={'suffix': "/100", 'font': {'size': 40, 'color': risk_color}},
-            gauge={
-                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                'bar': {'color': risk_color, 'thickness': 0.5},
-                'bgcolor': "white",
-                'borderwidth': 2,
-                'bordercolor': "gray",
-                'steps': [
-                    {'range': [0, 30], 'color': "#d4edda"},
-                    {'range': [30, 70], 'color': "#fff3cd"},
-                    {'range': [70, 100], 'color': "#f8d7da"}
-                ],
-                'threshold': {
-                    'line': {'color': risk_color, 'width': 4},
-                    'thickness': 0.75,
-                    'value': composite_risk
-                }
-            }
-        ))
-        
-        fig.update_layout(
-            height=400,
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font={'color': "#2c3e50", 'family': "Arial"},
-            margin=dict(t=80, b=40, l=40, r=40)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Display risk breakdown metrics dengan styling yang lebih baik
-        st.markdown("#### 🔍 Risk Breakdown Analysis")
-        
-        col_a, col_b, col_c = st.columns(3)
-        
-        with col_a:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            vol_level = "High" if volatility_risk > 60 else "Medium" if volatility_risk > 30 else "Low"
-            st.metric(
-                label="📈 **Volatility Risk**",
-                value=f"{volatility_risk:.1f}/100",
-                delta=vol_level
-            )
-            st.caption(f"Avg daily volatility: {(volatility_raw*100):.2f}%")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col_b:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric(
-                label="📊 **Market Sentiment**",
-                value=f"{sentiment_risk:.1f}/100",
-                delta=f"{negative_coins}/{len(df_processed)} coins down"
-            )
-            st.caption(f"{(100-sentiment_risk):.1f}% of coins are rising")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col_c:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            conc_level = "High" if concentration_risk > 60 else "Medium" if concentration_risk > 30 else "Low"
-            st.metric(
-                label="👑 **Market Concentration**",
-                value=f"{concentration_risk:.1f}/100",
-                delta=conc_level
-            )
-            st.caption(f"Top 5 control {concentration_risk:.1f}% of market")
-            st.markdown('</div>', unsafe_allow_html=True)
+    risk_counts = df_processed['market_cap_category'].value_counts()
+    fig = px.pie(
+        values=risk_counts.values,
+        names=risk_counts.index,
+        color=risk_counts.index,
+        color_discrete_map={
+            'Large Cap': '#28a745',
+            'Mid Cap': '#ffc107',
+            'Small Cap': '#dc3545'
+        },
+        hole=0.4,
+        title=""
+    )
     
-    else:
-        st.info("No data available for risk assessment")
+    fig.update_traces(
+        textposition='inside',
+        textinfo='percent+label',
+        hovertemplate="<b>%{label}</b><br>Count: %{value}<extra></extra>"
+    )
     
+    fig.update_layout(
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        height=300
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.markdown("### 📊 Risk by Market Cap Category")
+    st.markdown("### 🔥 High Volatility Coins")
     
-    if len(df_processed) > 0 and 'market_cap_category' in df_processed.columns:
-        # Hitung metrics per kategori
-        category_stats = df_processed.groupby('market_cap_category').agg({
-            'price_change_percentage_24h': ['mean', 'count'],
-            'volatility_24h': 'mean',
-            'risk_score': 'mean'
-        }).round(2)
+    high_vol = df_processed.nlargest(5, 'volatility_24h') if 'volatility_24h' in df_processed.columns else df_processed.head(5)
+    
+    fig = px.bar(
+        high_vol,
+        y='symbol',
+        x='volatility_24h' if 'volatility_24h' in high_vol.columns else 'price_change_percentage_24h',
+        orientation='h',
+        color='volatility_24h' if 'volatility_24h' in high_vol.columns else 'price_change_percentage_24h',
+        color_continuous_scale='Reds',
+        title=""
+    )
+    
+    fig.update_layout(
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        xaxis_title="Volatility" if 'volatility_24h' in high_vol.columns else "24h Change",
+        yaxis_title="",
+        height=300
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col3:
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown("### 💎 High Potential Coins")
+    
+    if 'performance_score' in df_processed.columns:
+        high_potential = df_processed.nlargest(5, 'performance_score')
         
-        # Flatten column names
-        category_stats.columns = ['avg_return', 'count', 'avg_volatility', 'avg_risk_score']
-        category_stats = category_stats.reset_index()
-        
-        # Buat bar chart untuk average returns by category
         fig = px.bar(
-            category_stats,
-            x='market_cap_category',
-            y='avg_return',
-            color='market_cap_category',
-            color_discrete_map={
-                'Large Cap': '#28a745',
-                'Mid Cap': '#ffc107',
-                'Small Cap': '#dc3545'
-            },
-            title="Average 24h Returns by Category",
-            text='avg_return',
-            labels={'avg_return': 'Avg Return %', 'market_cap_category': 'Category'}
+            high_potential,
+            y='symbol',
+            x='performance_score',
+            orientation='h',
+            color='performance_score',
+            color_continuous_scale='Greens',
+            title=""
         )
         
-        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
         fig.update_layout(
             plot_bgcolor='white',
             paper_bgcolor='white',
             showlegend=False,
-            height=300,
-            xaxis_title="",
-            yaxis_title="Avg Return %"
+            xaxis_title="Performance Score",
+            yaxis_title="",
+            height=300
         )
         
         st.plotly_chart(fig, use_container_width=True)
-        
-        # Display category insights
-        st.markdown("#### 💡 Category Insights:")
-        
-        for category in ['Large Cap', 'Mid Cap', 'Small Cap']:
-            if category in category_stats['market_cap_category'].values:
-                cat_data = category_stats[category_stats['market_cap_category'] == category].iloc[0]
-                count = int(cat_data['count'])
-                avg_return = cat_data['avg_return']
-                avg_risk = cat_data['avg_risk_score']
-                
-                if category == 'Large Cap':
-                    st.info(f"""
-                    **{category}** ({count} coins)
-                    - Avg Return: {avg_return:+.1f}%
-                    - Risk Score: {avg_risk:.1%}
-                    - Typically most stable
-                    """)
-                elif category == 'Mid Cap':
-                    st.warning(f"""
-                    **{category}** ({count} coins)
-                    - Avg Return: {avg_return:+.1f}%
-                    - Risk Score: {avg_risk:.1%}
-                    - Balance of risk & return
-                    """)
-                else:
-                    st.error(f"""
-                    **{category}** ({count} coins)
-                    - Avg Return: {avg_return:+.1f}%
-                    - Risk Score: {avg_risk:.1%}
-                    - Highest volatility
-                    """)
-    
     else:
-        st.info("Category data not available")
+        # Fallback to top gainers
+        top_gainers_small = df_processed[df_processed['market_cap_category'] == 'Small Cap'].nlargest(5, 'price_change_percentage_24h')
+        
+        fig = px.bar(
+            top_gainers_small,
+            y='symbol',
+            x='price_change_percentage_24h',
+            orientation='h',
+            color='price_change_percentage_24h',
+            color_continuous_scale='Greens',
+            title="Top Small Cap Gainers"
+        )
+        
+        fig.update_layout(
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            showlegend=False,
+            xaxis_title="24h Gain %",
+            yaxis_title="",
+            height=300
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
-
-# =====================
-# HIGH RISK & HIGH POTENTIAL COINS
-# =====================
-st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-st.markdown("### 🔥 High Risk vs 💎 High Potential Coins")
-
-if len(df_processed) > 0:
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 🔴 Top 5 High Risk Coins")
-        
-        # Get high risk coins (high volatility + negative returns)
-        high_risk_coins = df_processed[
-            (df_processed['price_change_percentage_24h'] < 0) &
-            (df_processed['volatility_24h'] > df_processed['volatility_24h'].median())
-        ].nlargest(5, 'risk_score')
-        
-        if len(high_risk_coins) > 0:
-            for _, coin in high_risk_coins.iterrows():
-                st.markdown(f"""
-                <div style="background: #f8d7da; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #dc3545;">
-                    <strong>{coin['symbol']}</strong> - {coin['name']}
-                    <br>
-                    ⚠️ Risk: <span class="risk-high">{coin['risk_score']:.1%}</span> | 
-                    📉 Change: <span style="color: #dc3545;">{coin['price_change_percentage_24h']:+.1f}%</span> |
-                    🔥 Vol: {(coin['volatility_24h']*100):.1f}%
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("No high risk coins identified")
-    
-    with col2:
-        st.markdown("#### 💎 Top 5 High Potential Coins")
-        
-        # Get high potential coins (positive returns + reasonable volatility)
-        high_potential = df_processed[
-            (df_processed['price_change_percentage_24h'] > 5) &  # >5% gain
-            (df_processed['volatility_24h'] < df_processed['volatility_24h'].median())  # Below median volatility
-        ].nlargest(5, 'performance_score')
-        
-        if len(high_potential) > 0:
-            for _, coin in high_potential.iterrows():
-                st.markdown(f"""
-                <div style="background: #d4edda; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #28a745;">
-                    <strong>{coin['symbol']}</strong> - {coin['name']}
-                    <br>
-                    ⭐ Potential: {coin['performance_score']:.2f} | 
-                    📈 Change: <span style="color: #28a745;">{coin['price_change_percentage_24h']:+.1f}%</span> |
-                    ⚡ Vol: {(coin['volatility_24h']*100):.1f}%
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("No high potential coins identified")
-    
-    # Risk explanation
-    with st.expander("📖 Understanding Risk Scores"):
-        st.markdown("""
-        **How Risk is Calculated:**
-        
-        1. **Volatility Component (40%)**: 
-           - Based on 24-hour price range
-           - Higher volatility = Higher risk score
-        
-        2. **Performance Component (30%)**:
-           - Negative 24h returns increase risk
-           - Recent underperformance is penalized
-        
-        3. **Market Cap Component (30%)**:
-           - Smaller market caps = Higher risk
-           - Larger caps generally more stable
-        
-        **Risk Levels:**
-        - 🟢 **LOW RISK** (<30%): Stable, large-cap coins with positive returns
-        - 🟡 **MEDIUM RISK** (30-70%): Moderate volatility, mixed performance
-        - 🔴 **HIGH RISK** (>70%): High volatility, negative returns, small caps
-        """)
-
-else:
-    st.info("No data available for risk analysis")
-
-st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================
 # KEY INSIGHTS & RECOMMENDATIONS
@@ -884,56 +729,47 @@ with col1:
     with st.container():
         st.markdown('<div class="info-box">', unsafe_allow_html=True)
         st.markdown("### 📈 **Market Outlook**")
-        
-        # Calculate metrics for insights
-        bull_percentage = (df_processed['price_change_percentage_24h'] > 0).mean() * 100
-        avg_return = df_processed['price_change_percentage_24h'].mean()
-        large_cap_perf = df_processed[df_processed['market_cap_category'] == 'Large Cap']['price_change_percentage_24h'].mean()
-        
-        st.markdown(f"""
-        - ✅ **Bullish sentiment**: {bull_percentage:.0f}% coins positive
-        - 📊 **Average return**: {avg_return:+.1f}%
-        - 💰 **Large cap performance**: {large_cap_perf:+.1f}%
-        - 🎯 **Recommendation**: Consider gradual accumulation in large caps
-        """)
+        st.markdown("""
+        - ✅ **Bullish sentiment** with {:.0f}% coins in green
+        - 📊 Average daily return: **{:.1f}%**
+        - 💰 Total market cap: **${:.1f}T**
+        - 🎯 **Recommendation**: Consider gradual accumulation
+        """.format(
+            (df_processed['price_change_percentage_24h'] > 0).mean() * 100,
+            df_processed['price_change_percentage_24h'].mean(),
+            df_processed['market_cap'].sum() / 1e12
+        ))
         st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
     with st.container():
         st.markdown('<div class="warning-box">', unsafe_allow_html=True)
         st.markdown("### ⚠️ **Risk Factors**")
-        
-        # Calculate risk metrics
-        high_vol_coins = (df_processed['volatility_24h'] > df_processed['volatility_24h'].quantile(0.75)).sum()
-        vol_percentage = (high_vol_coins / len(df_processed)) * 100
-        small_cap_vol = df_processed[df_processed['market_cap_category'] == 'Small Cap']['volatility_24h'].mean() * 100
-        
-        st.markdown(f"""
-        - 🔥 **High volatility**: {vol_percentage:.0f}% of coins (>75th percentile)
-        - 📉 **Small cap volatility**: {small_cap_vol:.1f}% average
-        - 👑 **Concentration**: Top 10 control {top_10_dominance:.1f}%
+        st.markdown("""
+        - 📉 **High concentration**: Top 10 coins control {:.1f}% of market
+        - 🔥 **Volatility**: Average {:.1f}% daily price swings
+        - 📊 **Distribution**: Market heavily skewed towards large caps
         - 🛡️ **Recommendation**: Diversify across market caps
-        """)
+        """.format(
+            top_10_dominance,
+            df_processed['volatility_24h'].mean() * 100 if 'volatility_24h' in df_processed.columns else 5
+        ))
         st.markdown('</div>', unsafe_allow_html=True)
 
 with col3:
     with st.container():
         st.markdown('<div class="info-box">', unsafe_allow_html=True)
         st.markdown("### 💡 **Opportunities**")
-        
-        # Calculate opportunity metrics
-        strong_gainers = (df_processed['price_change_percentage_24h'] > 10).sum()
-        mid_cap_gainers = df_processed[
-            (df_processed['market_cap_category'] == 'Mid Cap') & 
-            (df_processed['price_change_percentage_24h'] > 5)
-        ].shape[0]
-        
-        st.markdown(f"""
-        - 🚀 **Strong gainers**: {strong_gainers} coins with >10% gains
-        - 📈 **Mid-cap momentum**: {mid_cap_gainers} mid-caps with >5% gains
-        - 💎 **High potential**: {len(high_potential) if 'high_potential' in locals() else 0} coins identified
-        - 🎯 **Recommendation**: Focus on high-volume, mid-cap coins
-        """)
+        st.markdown("""
+        - 🚀 **Emerging coins**: {:.0f} small caps showing >10% gains
+        - 📈 **Momentum**: {:.0f}% coins outperforming market average
+        - 💎 **Value**: Multiple mid-caps with strong fundamentals
+        - 🎯 **Recommendation**: Focus on high-volume, low-volatility coins
+        """.format(
+            len(df_processed[(df_processed['market_cap_category'] == 'Small Cap') & 
+                           (df_processed['price_change_percentage_24h'] > 10)]),
+            (df_processed['price_change_percentage_24h'] > df_processed['price_change_percentage_24h'].mean()).mean() * 100
+        ))
         st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================
@@ -945,7 +781,7 @@ with st.expander("📋 **View Detailed Data Table**", expanded=False):
     # Select columns untuk display
     display_cols = ['name', 'symbol', 'market_cap_formatted', 
                    'current_price', 'price_change_percentage_24h',
-                   'market_cap_category', 'risk_score']
+                   'market_cap_category']
     
     # Filter columns yang ada
     available_cols = [col for col in display_cols if col in df_processed.columns]
@@ -956,87 +792,68 @@ with st.expander("📋 **View Detailed Data Table**", expanded=False):
         # Apply styling
         def color_returns(val):
             if isinstance(val, (int, float)):
-                return 'color: #28a745' if val > 0 else 'color: #dc3545'
+                return 'color: green' if val > 0 else 'color: red'
             elif isinstance(val, str) and '%' in val:
-                return 'color: #28a745' if '+' in val else 'color: #dc3545'
+                return 'color: green' if '+' in val else 'color: red'
             return ''
         
-        def color_risk(val):
-            if isinstance(val, (int, float)):
-                if val > 0.7:
-                    return 'background-color: #f8d7da'
-                elif val > 0.3:
-                    return 'background-color: #fff3cd'
-                else:
-                    return 'background-color: #d4edda'
-            return ''
-        
-        styled_df = display_df.style.map(color_returns, 
-                                        subset=['price_change_percentage_24h'])
-        
-        if 'risk_score' in display_df.columns:
-            styled_df = styled_df.map(color_risk, 
-                                     subset=['risk_score'])
-        
-        # Format columns
-        if 'current_price' in display_df.columns:
-            display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:,.2f}")
-        
-        if 'risk_score' in display_df.columns:
-            display_df['risk_score'] = display_df['risk_score'].apply(lambda x: f"{x:.1%}")
+        styled_df = display_df.style.applymap(color_returns, 
+                                             subset=['price_change_percentage_24h'])
         
         st.dataframe(
-            display_df,
+            styled_df,
             use_container_width=True,
             height=400,
             column_config={
-                'market_cap_formatted': "Market Cap",
-                'price_change_percentage_24h': st.column_config.NumberColumn(
+                'market_cap_formatted': st.column_config.TextColumn("Market Cap"),
+                'price_change_percentage_24h': st.column_config.ProgressColumn(
                     "24h Change %",
-                    format="%.1f%%"
-                ),
-                'risk_score': st.column_config.ProgressColumn(
-                    "Risk Score",
                     format="%.1f%%",
-                    min_value=0,
-                    max_value=1
+                    min_value=float(df_processed['price_change_percentage_24h'].min()),
+                    max_value=float(df_processed['price_change_percentage_24h'].max())
                 )
             }
         )
 
 # =====================
-# PRESENTATION CONTROLS
-# =====================
-st.markdown("---")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    if st.button("🎯 **Enter Presentation Mode**", use_container_width=True):
-        st.balloons()
-        st.success("Presentation mode activated! Press 'F' for fullscreen.")
-
-with col2:
-    if st.button("🔄 **Refresh Data**", use_container_width=True):
-        st.rerun()
-
-with col3:
-    if st.button("📥 **Export Report**", use_container_width=True):
-        st.info("Report export feature coming soon!")
-
-# =====================
 # FOOTER & CREDITS
 # =====================
-st.markdown("""
-<div style="text-align: center; color: #6c757d; padding: 20px; margin-top: 30px;">
-    <hr style="border: 1px solid #e0e0e0; margin: 20px 0;">
-    <p style="font-size: 0.9rem;">
-        📊 <strong>Crypto Market Intelligence Dashboard</strong> | 
-        📅 Last Updated: Today | 
-        🔍 {:,} cryptocurrencies analyzed
-    </p>
-    <p style="font-size: 0.8rem; color: #adb5bd;">
-        For presentation and educational purposes | Data updates in real-time
-    </p>
-</div>
-""".format(len(df_processed)), unsafe_allow_html=True)
+st.markdown("---")
+footer_col1, footer_col2, footer_col3 = st.columns([1, 2, 1])
+
+with footer_col1:
+    st.markdown("""
+    <div style="text-align: center;">
+        <p style="color: #6c757d; font-size: 0.9rem;">
+        📅 Last Updated<br>
+        <span style="font-weight: 600;">Today</span>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with footer_col2:
+    st.markdown("""
+    <div style="text-align: center;">
+        <p style="color: #6c757d; font-size: 0.9rem;">
+        📊 <span style="font-weight: 600;">Crypto Market Intelligence Dashboard</span><br>
+        Data Analysis & Visualization Platform
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with footer_col3:
+    st.markdown("""
+    <div style="text-align: center;">
+        <p style="color: #6c757d; font-size: 0.9rem;">
+        🔍 Data Points<br>
+        <span style="font-weight: 600;">{:,}</span> cryptocurrencies
+        </p>
+    </div>
+    """.format(len(df_processed)), unsafe_allow_html=True)
+
+# =====================
+# PRESENTATION MODE BUTTON
+# =====================
+if st.button("🎯 Enter Presentation Mode", use_container_width=True):
+    st.balloons()
+    st.success("Presentation mode activated! Press 'F' for fullscreen.")
