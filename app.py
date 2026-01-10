@@ -178,7 +178,7 @@ elif performance_filter == "Volatilitas Tinggi":
         df_filtered["volatility_24h_raw"].quantile(0.75)
     ]
 elif performance_filter == "Volume Trading Tinggi":
-    df_filtered = df_filtered[df_filtered["volume_marketcap_ratio"] > df_filtered["volume_marketcap_ratio"].quantile(0.75)]
+    df_filtered = df_filtered[df_filtered["volume_marketcap_ratio_raw"] > df_filtered["volume_marketcap_ratio_raw"].quantile(0.75)]
 
 # Kategori market cap
 df_filtered["category"] = df_filtered["market_cap_rank"].apply(categorize)
@@ -322,7 +322,10 @@ with tab1:
     
     with col2:
         # Volume Health
-        volume_health = df_filtered['volume_marketcap_ratio'].mean() * 100 if len(df_filtered) > 0 else 0
+        volume_health = (
+            df_filtered['volume_marketcap_ratio_raw'].mean() * 100
+            if len(df_filtered) > 0 else 0
+        )
         volume_health = min(max(volume_health, 0), 10)  # Batasi antara 0-10
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
@@ -436,7 +439,7 @@ with tab2:
         
         # Buat matriks performa
         performance_metrics = ['price_change_percentage_24h', 'price_change_percentage_7d',
-                              'volatility_24h', 'volume_marketcap_ratio', 'fdv_mc_ratio']
+                              'volatility_24h', 'volume_marketcap_ratio_raw', 'fdv_mc_ratio']
         
         # Pastikan kolom ada dan tidak NaN
         available_metrics = [m for m in performance_metrics if m in top_20.columns and not top_20[m].isna().all()]
@@ -449,7 +452,7 @@ with tab2:
                 'price_change_percentage_24h': '24h Return',
                 'price_change_percentage_7d': '7d Return',
                 'volatility_24h': 'Volatility',
-                'volume_marketcap_ratio': 'Volume/MC Ratio',
+                'volume_marketcap_ratio_raw': 'Volume/MC Ratio',
                 'fdv_mc_ratio': 'FDV/MC Ratio'
             }
             performance_df.columns = [metric_names.get(col, col) for col in available_metrics]
@@ -783,6 +786,7 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
 
