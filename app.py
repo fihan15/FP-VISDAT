@@ -477,9 +477,6 @@ with tab3:
     
     if len(df_filtered) > 0:
         # Scatter plot dengan kategori
-        st.write("TOTAL df_filtered:", len(df_filtered))
-st.write("PER CATEGORY:")
-st.write(df_filtered["category"].value_counts())
         scatter_data = (
             df_filtered
             .groupby("category", group_keys=False)
@@ -798,6 +795,7 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
 
