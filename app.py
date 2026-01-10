@@ -574,9 +574,9 @@ with tab4:
             st.subheader("⚠️ Indikator Risiko Pasar")
 
             # ===== RISK COMPONENTS (RAW) =====
-            volatility_risk = df_filtered["volatility_raw"].mean() * 100
+            volatility_risk = df_filtered["volatility_24h"].mean() * 100
             sentiment_risk = (df_filtered["price_change_percentage_24h"] < 0).mean() * 100
-            inflation_risk = df_filtered["inflation_raw"].mean() * 100
+            inflation_risk = df_filtered["supply_inflation_risk"].mean() * 100
         
             # Clamp
             volatility_risk = np.clip(volatility_risk, 0, 50)
@@ -732,4 +732,5 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
