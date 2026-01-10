@@ -568,53 +568,57 @@ with tab3:
 # TAB 4: RISK ASSESSMENT
 # =====================
 with tab4:
-    col1, col2 = st.columns(2)
-    
-    with col1:
-            st.subheader("⚠️ Indikator Risiko Pasar")
+    left, right = st.columns([2, 1])  # gauge lebih besar
 
-            # ===== RISK COMPONENTS (RAW) =====
-            volatility_risk = df_filtered["volatility_24h"].mean() * 100
-            sentiment_risk = (df_filtered["price_change_percentage_24h"] < 0).mean() * 100
-            inflation_risk = df_filtered["supply_inflation_risk"].mean() * 100
-        
-            # Clamp
-            volatility_risk = np.clip(volatility_risk, 0, 50)
-            sentiment_risk = np.clip(sentiment_risk, 0, 100)
-            inflation_risk = np.clip(inflation_risk, 0, 100)
-        
-            # Composite Score
-            risk_score = (
-                volatility_risk * 0.4 +
-                sentiment_risk * 0.3 +
-                inflation_risk * 0.3
-            )
-        
-            # ===== GAUGE =====
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=risk_score,
-                delta={"reference": 50},
-                gauge={
-                    "axis": {"range": [0, 100]},
-                    "steps": [
-                        {"range": [0, 30], "color": "green"},
-                        {"range": [30, 70], "color": "yellow"},
-                        {"range": [70, 100], "color": "red"},
-                    ],
-                    "bar": {"color": "darkblue"}
-                },
-                title={"text": "Tingkat Risiko Pasar"}
-            ))
-        
-            fig.update_layout(template="plotly_dark", height=350)
-            st.plotly_chart(fig, use_container_width=True)
-        
-            # ===== BREAKDOWN =====
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Volatilitas", f"{volatility_risk:.1f}")
-            col2.metric("Sentimen", f"{sentiment_risk:.1f}")
-            col3.metric("Inflasi Supply", f"{inflation_risk:.1f}")
+    # =====================
+    # LEFT: GAUGE
+    # =====================
+    with left:
+        st.subheader("⚠️ Indikator Risiko Pasar")
+
+        volatility_risk = df_filtered["volatility_24h"].mean() * 100
+        sentiment_risk = (df_filtered["price_change_percentage_24h"] < 0).mean() * 100
+        inflation_risk = df_filtered["supply_inflation_risk"].mean() * 100
+
+        volatility_risk = np.clip(volatility_risk, 0, 50)
+        sentiment_risk = np.clip(sentiment_risk, 0, 100)
+        inflation_risk = np.clip(inflation_risk, 0, 100)
+
+        risk_score = (
+            volatility_risk * 0.4 +
+            sentiment_risk * 0.3 +
+            inflation_risk * 0.3
+        )
+
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=risk_score,
+            delta={"reference": 50},
+            gauge={
+                "axis": {"range": [0, 100]},
+                "steps": [
+                    {"range": [0, 30], "color": "green"},
+                    {"range": [30, 70], "color": "yellow"},
+                    {"range": [70, 100], "color": "red"},
+                ],
+                "bar": {"color": "darkblue"}
+            },
+            title={"text": "Tingkat Risiko Pasar"}
+        ))
+
+        fig.update_layout(template="plotly_dark", height=320)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # =====================
+    # RIGHT: BREAKDOWN METRICS
+    # =====================
+    with right:
+        st.subheader("📌 Breakdown Risiko")
+
+        st.metric("Volatilitas", f"{volatility_risk:.1f}")
+        st.metric("Sentimen", f"{sentiment_risk:.1f}")
+        st.metric("Inflasi Supply", f"{inflation_risk:.1f}")
+
     
     with col2:
         st.subheader("📊 Distribusi Risiko per Kategori")
@@ -732,5 +736,6 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
