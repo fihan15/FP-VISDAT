@@ -309,14 +309,22 @@ logger.info("Cleaning and engineering features...")
 # Drop rows with critical missing values
 critical_cols = ["high_24h", "low_24h", "price_change_24h", 
                  "price_change_percentage_24h", "market_cap_change_24h"]
-df_clean = df.dropna(subset=[col for col in critical_cols if col in df.columns])
+critical_cols = [col for col in critical_cols if col in df.columns]
+
+if critical_cols:
+    df_clean = df.dropna(subset=critical_cols)
+else:
+    df_clean = df.copy()
 
 # Create new features
 df_clean = df_clean.copy()
 
 # Basic features
-df_clean["volatility_24h"] = (df_clean["high_24h"] - df_clean["low_24h"]) / df_clean["current_price"].replace(0, np.nan)
-df_clean["volume_marketcap_ratio"] = df_clean["total_volume"] / df_clean["market_cap"].replace(0, np.nan)
+if all(col in df_clean.columns for col in ["high_24h", "low_24h", "current_price"]):
+    df_clean["volatility_24h"] = (df_clean["high_24h"] - df_clean["low_24h"]) / df_clean["current_price"].replace(0, np.nan)
+
+if all(col in df_clean.columns for col in ["total_volume", "market_cap"]):
+    df_clean["volume_marketcap_ratio"] = df_clean["total_volume"] / df_clean["market_cap"].replace(0, np.nan)
 
 # Supply features
 if "max_supply" in df_clean.columns and "circulating_supply" in df_clean.columns:
@@ -327,13 +335,15 @@ else:
     df_clean["supply_inflation_risk"] = 0.5  # Default moderate risk
 
 # Valuation features
-if "fully_diluted_valuation" in df_clean.columns:
+if "fully_diluted_valuation" in df_clean.columns and "market_cap" in df_clean.columns:
     df_clean["fdv_available"] = df_clean["fully_diluted_valuation"].notna().astype(int)
     df_clean["fdv_mc_ratio"] = df_clean["fully_diluted_valuation"] / df_clean["market_cap"].replace(0, np.nan)
 
 # Handle outliers for visualization
-scale_cols = ["market_cap", "total_volume", "volatility_24h", "volume_marketcap_ratio"]
-scale_cols = [col for col in scale_cols if col in df_clean.columns]
+scale_cols = []
+for col in ["market_cap", "total_volume", "volatility_24h", "volume_marketcap_ratio"]:
+    if col in df_clean.columns:
+        scale_cols.append(col)
 
 # Save original for reference
 for col in scale_cols:
@@ -360,7 +370,10 @@ if "total_volume_original" in df_clean.columns:
         df_clean["size_normalized"] = 15  # Default size
 
 # Add category
-df_clean["category"] = df_clean["market_cap_rank"].apply(categorize)
+if "market_cap_rank" in df_clean.columns:
+    df_clean["category"] = df_clean["market_cap_rank"].apply(categorize)
+else:
+    df_clean["category"] = "Unknown"
 
 # Calculate risk scores
 df_clean["risk_score"] = calculate_risk_score(df_clean)
@@ -388,10 +401,11 @@ with st.sidebar:
     st.subheader("🔍 Filter Data")
     
     # Market cap rank filter
+    max_rank = min(1000, len(df_clean))
     rank_range = st.slider(
         "Market Cap Rank",
-        1, min(1000, len(df_clean)),
-        (1, 100),
+        1, max_rank,
+        (1, min(100, max_rank)),
         help="Filter berdasarkan peringkat market cap (1 = terbesar)"
     )
     
@@ -410,30 +424,59 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("🏷️ Filter Kategori")
     
-    categories = df_clean["category"].unique()
-    selected_categories = st.multiselect(
-        "Pilih Kategori Market Cap:",
-        options=categories,
-        default=categories,
-        help="Pilih satu atau lebih kategori"
-    )
+    if "category" in df_clean.columns:
+        categories = df_clean["category"].unique()
+        selected_categories = st.multiselect(
+            "Pilih Kategori Market Cap:",
+            options=categories,
+            default=categories,
+            help="Pilih satu atau lebih kategori"
+        )
+    else:
+        selected_categories = []
     
     # Price range filter
     st.markdown("---")
     st.subheader("💰 Filter Harga")
     
     if 'current_price' in df_clean.columns:
-        price_min = float(df_clean['current_price'].min())
-        price_max = float(df_clean['current_price'].max())
+        # Get price stats safely
+        price_series = pd.to_numeric(df_clean['current_price'], errors='coerce')
+        price_series = price_series.dropna()
         
-        price_range = st.slider(
-            "Rentang Harga (USD)",
-            min_value=price_min,
-            max_value=price_max,
-            value=(price_min, min(price_max, 1000)),
-            step=0.1,
-            format="%.2f"
-        )
+        if len(price_series) > 0:
+            price_min = float(price_series.min())
+            price_max = float(price_series.max())
+            
+            # Ensure min < max
+            if price_min < price_max:
+                price_range = st.slider(
+                    "Rentang Harga (USD)",
+                    min_value=float(price_min),
+                    max_value=float(price_max),
+                    value=(float(price_min), float(min(price_max, 1000))),
+                    step=0.1,
+                    format="%.2f"
+                )
+            else:
+                # If min == max, create a simple slider
+                price_range = st.slider(
+                    "Rentang Harga (USD)",
+                    min_value=0.0,
+                    max_value=1000.0,
+                    value=(0.0, 1000.0),
+                    step=0.1,
+                    format="%.2f"
+                )
+        else:
+            price_range = st.slider(
+                "Rentang Harga (USD)",
+                min_value=0.0,
+                max_value=1000.0,
+                value=(0.0, 1000.0),
+                step=0.1,
+                format="%.2f"
+            )
     
     # Theme selector
     st.markdown("---")
@@ -462,13 +505,14 @@ with st.sidebar:
 df_filtered = df_clean.copy()
 
 # Apply rank filter
-df_filtered = df_filtered[
-    (df_filtered["market_cap_rank"] >= rank_range[0]) &
-    (df_filtered["market_cap_rank"] <= rank_range[1])
-]
+if "market_cap_rank" in df_filtered.columns:
+    df_filtered = df_filtered[
+        (df_filtered["market_cap_rank"] >= rank_range[0]) &
+        (df_filtered["market_cap_rank"] <= rank_range[1])
+    ]
 
 # Apply category filter
-if selected_categories:
+if selected_categories and "category" in df_filtered.columns:
     df_filtered = df_filtered[df_filtered["category"].isin(selected_categories)]
 
 # Apply price filter
@@ -479,22 +523,20 @@ if 'current_price' in df_filtered.columns and 'price_range' in locals():
     ]
 
 # Apply performance filter
-if performance_filter == "Harga Naik 24h":
+if performance_filter == "Harga Naik 24h" and "price_change_percentage_24h" in df_filtered.columns:
     df_filtered = df_filtered[df_filtered["price_change_percentage_24h"] > 0]
-elif performance_filter == "Harga Turun 24h":
+elif performance_filter == "Harga Turun 24h" and "price_change_percentage_24h" in df_filtered.columns:
     df_filtered = df_filtered[df_filtered["price_change_percentage_24h"] < 0]
-elif performance_filter == "Volatilitas Tinggi":
-    if 'volatility_24h' in df_filtered.columns:
-        threshold = df_filtered["volatility_24h"].quantile(0.75)
-        df_filtered = df_filtered[df_filtered["volatility_24h"] > threshold]
-elif performance_filter == "Volume Trading Tinggi":
-    if 'volume_marketcap_ratio' in df_filtered.columns:
-        threshold = df_filtered["volume_marketcap_ratio"].quantile(0.75)
-        df_filtered = df_filtered[df_filtered["volume_marketcap_ratio"] > threshold]
-elif performance_filter == "Risiko Tinggi":
+elif performance_filter == "Volatilitas Tinggi" and "volatility_24h" in df_filtered.columns:
+    threshold = df_filtered["volatility_24h"].quantile(0.75)
+    df_filtered = df_filtered[df_filtered["volatility_24h"] > threshold]
+elif performance_filter == "Volume Trading Tinggi" and "volume_marketcap_ratio" in df_filtered.columns:
+    threshold = df_filtered["volume_marketcap_ratio"].quantile(0.75)
+    df_filtered = df_filtered[df_filtered["volume_marketcap_ratio"] > threshold]
+elif performance_filter == "Risiko Tinggi" and "risk_score" in df_filtered.columns:
     threshold = df_filtered["risk_score"].quantile(0.75)
     df_filtered = df_filtered[df_filtered["risk_score"] > threshold]
-elif performance_filter == "Risiko Rendah":
+elif performance_filter == "Risiko Rendah" and "risk_score" in df_filtered.columns:
     threshold = df_filtered["risk_score"].quantile(0.25)
     df_filtered = df_filtered[df_filtered["risk_score"] < threshold]
 
@@ -520,6 +562,8 @@ with col3:
     if len(df_filtered) > 0 and 'price_change_percentage_24h' in df_filtered.columns:
         avg_change = df_filtered['price_change_percentage_24h'].mean()
         st.metric("Avg Change 24h", f"{avg_change:+.2f}%")
+    else:
+        st.metric("Avg Change 24h", "N/A")
 
 # Export data if requested
 if 'export_data' in st.session_state and st.session_state['export_data']:
@@ -556,9 +600,12 @@ with tab1:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_market_cap = df_filtered['market_cap'].sum() if 'market_cap' in df_filtered.columns else 0
-        st.metric("Total Market Cap", f"${total_market_cap:,.0f}")
-        st.caption("Nilai pasar total")
+        if 'market_cap' in df_filtered.columns:
+            total_market_cap = df_filtered['market_cap'].sum()
+            st.metric("Total Market Cap", f"${total_market_cap:,.0f}")
+            st.caption("Nilai pasar total")
+        else:
+            st.metric("Total Market Cap", "N/A")
     
     with col2:
         if len(df_filtered) > 0 and 'price_change_percentage_24h' in df_filtered.columns:
@@ -594,24 +641,32 @@ with tab1:
             avg_volume_ratio = df_filtered["volume_marketcap_ratio"].mean()
             st.metric("Avg Volume/MC", f"{avg_volume_ratio:.3f}")
             st.caption("Rasio aktivitas")
+        else:
+            st.metric("Avg Volume/MC", "N/A")
     
     with col6:
         if 'category' in df_filtered.columns:
             big_cap_count = (df_filtered["category"] == "Big Cap").sum()
             st.metric("Big Cap Coins", big_cap_count)
             st.caption("Rank 1-10")
+        else:
+            st.metric("Big Cap Coins", "N/A")
     
     with col7:
         if 'fdv_mc_ratio' in df_filtered.columns:
             avg_fdv_ratio = df_filtered['fdv_mc_ratio'].median()
             st.metric("Median FDV/MC", f"{avg_fdv_ratio:.2f}")
             st.caption("Potensi pengenceran")
+        else:
+            st.metric("Median FDV/MC", "N/A")
     
     with col8:
         if 'price_change_percentage_24h' in df_filtered.columns:
             median_return = df_filtered['price_change_percentage_24h'].median()
             st.metric("Median Return 24h", f"{median_return:+.2f}%")
             st.caption("Return median")
+        else:
+            st.metric("Median Return 24h", "N/A")
     
     st.markdown("---")
     
@@ -621,28 +676,33 @@ with tab1:
     with col1:
         st.subheader("🗺️ Dominasi Market")
         
-        if len(df_filtered) > 0:
+        if len(df_filtered) > 0 and "market_cap" in df_filtered.columns:
             # Limit to top 30 for clarity
-            display_df = df_filtered.nsmallest(30, "market_cap_rank")
+            display_df = df_filtered.nsmallest(30, "market_cap_rank") if "market_cap_rank" in df_filtered.columns else df_filtered.head(30)
             
             if not display_df.empty:
-                fig = px.treemap(
-                    display_df,
-                    path=["category", "symbol"],
-                    values="market_cap",
-                    color="price_change_percentage_24h",
-                    color_continuous_scale="RdYlGn",
-                    color_continuous_midpoint=0,
-                    hover_data={
-                        "current_price": ":.2f",
-                        "market_cap_rank": True,
-                        "price_change_percentage_24h": ":.2f%"
-                    },
-                    title="Market Dominance (Top 30 by Market Cap)"
-                )
-                fig.update_layout(margin=dict(t=50, l=25, r=25, b=25))
-                st.plotly_chart(fig, use_container_width=True)
-                st.caption("Ukuran: Market Cap | Warna: Perubahan harga 24h")
+                # Check required columns
+                required_treemap = ["category", "symbol", "market_cap"]
+                if all(col in display_df.columns for col in required_treemap):
+                    fig = px.treemap(
+                        display_df,
+                        path=["category", "symbol"],
+                        values="market_cap",
+                        color="price_change_percentage_24h" if "price_change_percentage_24h" in display_df.columns else None,
+                        color_continuous_scale="RdYlGn",
+                        color_continuous_midpoint=0,
+                        hover_data={
+                            "current_price": ":.2f" if "current_price" in display_df.columns else None,
+                            "market_cap_rank": True if "market_cap_rank" in display_df.columns else None,
+                            "price_change_percentage_24h": ":.2f%" if "price_change_percentage_24h" in display_df.columns else None
+                        },
+                        title="Market Dominance (Top 30 by Market Cap)"
+                    )
+                    fig.update_layout(margin=dict(t=50, l=25, r=25, b=25))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption("Ukuran: Market Cap | Warna: Perubahan harga 24h")
+                else:
+                    st.info("Kolom yang diperlukan untuk treemap tidak tersedia")
             else:
                 st.info("Tidak ada data untuk ditampilkan")
         else:
@@ -786,7 +846,10 @@ with tab2:
         st.subheader("🏆 Top 10 Market Cap")
         
         # Get top 10 by market cap
-        top_10 = df_clean.nsmallest(10, "market_cap_rank")
+        if "market_cap_rank" in df_clean.columns:
+            top_10 = df_clean.nsmallest(10, "market_cap_rank")
+        else:
+            top_10 = df_clean.head(10)
         
         if not top_10.empty:
             # Create display dataframe
@@ -798,14 +861,14 @@ with tab2:
             
             # Format for display
             if 'market_cap' in display_df.columns:
-                display_df['market_cap'] = display_df['market_cap'].apply(lambda x: f"${x:,.0f}")
+                display_df['market_cap'] = display_df['market_cap'].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "N/A")
             
             if 'current_price' in display_df.columns:
-                display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:,.2f}")
+                display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:,.2f}" if pd.notnull(x) else "N/A")
             
             if 'price_change_percentage_24h' in display_df.columns:
                 display_df['price_change_percentage_24h'] = display_df['price_change_percentage_24h'].apply(
-                    lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
+                    lambda x: f"{'+' if x > 0 else ''}{x:.2f}%" if pd.notnull(x) else "N/A")
             
             st.dataframe(
                 display_df,
@@ -822,22 +885,23 @@ with tab2:
             )
             
             # Bar chart visualization
-            fig = px.bar(
-                top_10,
-                x="symbol",
-                y="market_cap",
-                color="price_change_percentage_24h",
-                text_auto=".2s",
-                color_continuous_scale="RdYlGn",
-                color_continuous_midpoint=0,
-                title="Top 10 by Market Cap"
-            )
-            fig.update_layout(
-                xaxis_title="Symbol",
-                yaxis_title="Market Cap",
-                coloraxis_colorbar=dict(title="24h Change %")
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if 'market_cap' in top_10.columns and 'symbol' in top_10.columns:
+                fig = px.bar(
+                    top_10,
+                    x="symbol",
+                    y="market_cap",
+                    color="price_change_percentage_24h" if "price_change_percentage_24h" in top_10.columns else None,
+                    text_auto=".2s",
+                    color_continuous_scale="RdYlGn",
+                    color_continuous_midpoint=0,
+                    title="Top 10 by Market Cap"
+                )
+                fig.update_layout(
+                    xaxis_title="Symbol",
+                    yaxis_title="Market Cap",
+                    coloraxis_colorbar=dict(title="24h Change %") if "price_change_percentage_24h" in top_10.columns else None
+                )
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Tidak ada data top 10")
     
@@ -864,10 +928,11 @@ with tab2:
             # Format for display
             if 'price_change_percentage_24h' in display_df.columns:
                 display_df['price_change_percentage_24h'] = display_df['price_change_percentage_24h'].apply(
-                    lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
+                    lambda x: f"{'+' if x > 0 else ''}{x:.2f}%" if pd.notnull(x) else "N/A")
             
             if 'current_price' in display_df.columns:
-                display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:,.2f}")
+                display_df['current_price'] = display_df['current_price'].apply(
+                    lambda x: f"${x:,.2f}" if pd.notnull(x) else "N/A")
             
             # Apply color coding
             def color_type(val):
@@ -876,7 +941,10 @@ with tab2:
                 else:
                     return 'color: #f44336'
             
-            styled_df = display_df.style.applymap(color_type, subset=['type'])
+            if 'type' in display_df.columns:
+                styled_df = display_df.style.applymap(color_type, subset=['type'])
+            else:
+                styled_df = display_df
             
             st.dataframe(
                 styled_df,
@@ -893,21 +961,22 @@ with tab2:
             )
             
             # Visualization
-            fig = px.bar(
-                combo,
-                x="price_change_percentage_24h",
-                y="symbol",
-                orientation="h",
-                color="type",
-                color_discrete_map={'Gainer': '#4caf50', 'Loser': '#f44336'},
-                title="Top Gainers vs Losers"
-            )
-            fig.update_layout(
-                xaxis_title="Price Change (%)",
-                yaxis_title="Symbol",
-                legend_title="Type"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if not combo.empty:
+                fig = px.bar(
+                    combo,
+                    x="price_change_percentage_24h",
+                    y="symbol",
+                    orientation="h",
+                    color="type" if "type" in combo.columns else None,
+                    color_discrete_map={'Gainer': '#4caf50', 'Loser': '#f44336'} if "type" in combo.columns else None,
+                    title="Top Gainers vs Losers"
+                )
+                fig.update_layout(
+                    xaxis_title="Price Change (%)",
+                    yaxis_title="Symbol",
+                    legend_title="Type" if "type" in combo.columns else None
+                )
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Tidak ada data untuk gainers/losers")
     
@@ -916,7 +985,10 @@ with tab2:
     
     if len(df_filtered) > 0:
         # Select top 20 by market cap within filtered data
-        top_20 = df_filtered.nsmallest(20, "market_cap_rank")
+        if "market_cap_rank" in df_filtered.columns:
+            top_20 = df_filtered.nsmallest(20, "market_cap_rank")
+        else:
+            top_20 = df_filtered.head(20)
         
         if not top_20.empty:
             # Define metrics for heatmap
@@ -982,60 +1054,68 @@ with tab3:
     
     if len(df_filtered) > 0:
         # Use top 100 for clarity
-        scatter_data = df_filtered.nsmallest(100, "market_cap_rank").copy()
+        if "market_cap_rank" in df_filtered.columns:
+            scatter_data = df_filtered.nsmallest(100, "market_cap_rank").copy()
+        else:
+            scatter_data = df_filtered.head(100).copy()
         
-        # Create scatter plot
-        fig = px.scatter(
-            scatter_data,
-            x="current_price",
-            y="market_cap",
-            log_x=True,
-            log_y=True,
-            color="category",
-            size="size_normalized",
-            hover_name="name",
-            hover_data={
-                "symbol": True,
-                "price_change_percentage_24h": ":.2f%",
-                "volatility_24h": ":.3f",
-                "volume_marketcap_ratio": ":.3f",
-                "market_cap_rank": True,
-                "category": False
-            },
-            title="Harga vs Market Cap (Log Scale)",
-            labels={
-                "current_price": "Current Price (USD, log)",
-                "market_cap": "Market Cap (log)",
-                "category": "Category"
-            }
-        )
-        
-        fig.update_layout(
-            hovermode="closest",
-            legend=dict(
-                title="Market Cap Category",
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
+        # Check required columns
+        required_scatter = ["current_price", "market_cap", "category"]
+        if all(col in scatter_data.columns for col in required_scatter):
+            # Create scatter plot
+            fig = px.scatter(
+                scatter_data,
+                x="current_price",
+                y="market_cap",
+                log_x=True,
+                log_y=True,
+                color="category",
+                size="size_normalized" if "size_normalized" in scatter_data.columns else None,
+                hover_name="name" if "name" in scatter_data.columns else None,
+                hover_data={
+                    "symbol": True if "symbol" in scatter_data.columns else None,
+                    "price_change_percentage_24h": ":.2f%" if "price_change_percentage_24h" in scatter_data.columns else None,
+                    "volatility_24h": ":.3f" if "volatility_24h" in scatter_data.columns else None,
+                    "volume_marketcap_ratio": ":.3f" if "volume_marketcap_ratio" in scatter_data.columns else None,
+                    "market_cap_rank": True if "market_cap_rank" in scatter_data.columns else None,
+                    "category": False
+                },
+                title="Harga vs Market Cap (Log Scale)",
+                labels={
+                    "current_price": "Current Price (USD, log)",
+                    "market_cap": "Market Cap (log)",
+                    "category": "Category"
+                }
             )
-        )
-        
-        fig.update_traces(
-            marker=dict(
-                opacity=0.8,
-                line=dict(width=1, color='DarkSlateGrey')
+            
+            fig.update_layout(
+                hovermode="closest",
+                legend=dict(
+                    title="Market Cap Category",
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
             )
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("""
-        **Interpretasi:**
-        - **Ukuran bubble**: Volume trading (semakin besar = volume lebih tinggi)
-        - **Warna**: Kategori market cap
-        - **Posisi**: Harga (sumbu X) vs Market Cap (sumbu Y)
-        """)
+            
+            fig.update_traces(
+                marker=dict(
+                    opacity=0.8,
+                    line=dict(width=1, color='DarkSlateGrey')
+                )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("""
+            **Interpretasi:**
+            - **Ukuran bubble**: Volume trading (semakin besar = volume lebih tinggi)
+            - **Warna**: Kategori market cap
+            - **Posisi**: Harga (sumbu X) vs Market Cap (sumbu Y)
+            """)
+        else:
+            st.info("Kolom yang diperlukan untuk scatter plot tidak tersedia")
     else:
         st.info("Tidak ada data yang sesuai dengan filter")
     
@@ -1127,27 +1207,27 @@ with tab3:
             # Format numeric columns
             if 'current_price' in display_data.columns:
                 display_data['current_price'] = display_data['current_price'].apply(
-                    lambda x: f"${x:,.2f}")
+                    lambda x: f"${x:,.2f}" if pd.notnull(x) else "N/A")
             
             if 'price_change_percentage_24h' in display_data.columns:
                 display_data['price_change_percentage_24h'] = display_data['price_change_percentage_24h'].apply(
-                    lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
+                    lambda x: f"{'+' if x > 0 else ''}{x:.2f}%" if pd.notnull(x) else "N/A")
             
             if 'market_cap' in display_data.columns:
                 display_data['market_cap'] = display_data['market_cap'].apply(
-                    lambda x: f"${x:,.0f}")
+                    lambda x: f"${x:,.0f}" if pd.notnull(x) else "N/A")
             
             if 'total_volume' in display_data.columns:
                 display_data['total_volume'] = display_data['total_volume'].apply(
-                    lambda x: f"${x:,.0f}")
+                    lambda x: f"${x:,.0f}" if pd.notnull(x) else "N/A")
             
             if 'volatility_24h' in display_data.columns:
                 display_data['volatility_24h'] = display_data['volatility_24h'].apply(
-                    lambda x: f"{x:.2%}")
+                    lambda x: f"{x:.2%}" if pd.notnull(x) else "N/A")
             
             if 'risk_score' in display_data.columns:
                 display_data['risk_score'] = display_data['risk_score'].apply(
-                    lambda x: f"{x:.3f}")
+                    lambda x: f"{x:.3f}" if pd.notnull(x) else "N/A")
             
             # Display dataframe
             st.dataframe(
@@ -1207,7 +1287,10 @@ with tab4:
             
             # Concentration risk (15%)
             if 'market_cap' in df_filtered.columns and df_filtered['market_cap'].sum() > 0:
-                top_10_mc = df_filtered.nsmallest(10, 'market_cap_rank')['market_cap'].sum()
+                if "market_cap_rank" in df_filtered.columns:
+                    top_10_mc = df_filtered.nsmallest(10, 'market_cap_rank')['market_cap'].sum()
+                else:
+                    top_10_mc = df_filtered.head(10)['market_cap'].sum()
                 total_mc = df_filtered['market_cap'].sum()
                 concentration = (top_10_mc / total_mc) * 100
                 risk_indicators['Concentration'] = min(concentration, 100)
@@ -1385,17 +1468,20 @@ with tab4:
         
         # Format values
         if 'risk_score' in display_df.columns:
-            display_df['risk_score'] = display_df['risk_score'].apply(lambda x: f"{x:.3f}")
+            display_df['risk_score'] = display_df['risk_score'].apply(
+                lambda x: f"{x:.3f}" if pd.notnull(x) else "N/A")
         
         if 'volatility_24h' in display_df.columns:
-            display_df['volatility_24h'] = display_df['volatility_24h'].apply(lambda x: f"{x:.2%}")
+            display_df['volatility_24h'] = display_df['volatility_24h'].apply(
+                lambda x: f"{x:.2%}" if pd.notnull(x) else "N/A")
         
         if 'price_change_percentage_24h' in display_df.columns:
             display_df['price_change_percentage_24h'] = display_df['price_change_percentage_24h'].apply(
-                lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
+                lambda x: f"{'+' if x > 0 else ''}{x:.2f}%" if pd.notnull(x) else "N/A")
         
         if 'volume_marketcap_ratio' in display_df.columns:
-            display_df['volume_marketcap_ratio'] = display_df['volume_marketcap_ratio'].apply(lambda x: f"{x:.4f}")
+            display_df['volume_marketcap_ratio'] = display_df['volume_marketcap_ratio'].apply(
+                lambda x: f"{x:.4f}" if pd.notnull(x) else "N/A")
         
         # Apply color coding based on risk score
         def highlight_risk(val):
@@ -1410,7 +1496,10 @@ with tab4:
             except:
                 return ''
         
-        styled_df = display_df.style.applymap(highlight_risk, subset=['risk_score'])
+        if 'risk_score' in display_df.columns:
+            styled_df = display_df.style.applymap(highlight_risk, subset=['risk_score'])
+        else:
+            styled_df = display_df
         
         st.dataframe(
             styled_df,
@@ -1456,25 +1545,28 @@ with tab4:
         
         # Limit for clarity
         if len(scatter_data) > 100:
-            scatter_data = scatter_data.nsmallest(100, 'market_cap_rank')
+            if "market_cap_rank" in scatter_data.columns:
+                scatter_data = scatter_data.nsmallest(100, 'market_cap_rank')
+            else:
+                scatter_data = scatter_data.head(100)
         
         fig = px.scatter(
             scatter_data,
             x='risk_score',
             y='price_change_percentage_24h',
-            color='category',
-            size='market_cap',
-            hover_name='name',
+            color='category' if 'category' in scatter_data.columns else None,
+            size='market_cap' if 'market_cap' in scatter_data.columns else None,
+            hover_name='name' if 'name' in scatter_data.columns else None,
             hover_data={
-                'symbol': True,
-                'volatility_24h': ':.3f',
-                'volume_marketcap_ratio': ':.4f'
+                'symbol': True if 'symbol' in scatter_data.columns else None,
+                'volatility_24h': ':.3f' if 'volatility_24h' in scatter_data.columns else None,
+                'volume_marketcap_ratio': ':.4f' if 'volume_marketcap_ratio' in scatter_data.columns else None
             },
             title='Risk vs Return Analysis',
             labels={
                 'risk_score': 'Risk Score',
                 'price_change_percentage_24h': '24h Return (%)',
-                'category': 'Market Cap Category'
+                'category': 'Market Cap Category' if 'category' in scatter_data.columns else None
             }
         )
         
@@ -1535,7 +1627,8 @@ with st.expander("🔧 Debug Information", expanded=False):
         st.write("**Filtered Data:**")
         st.write(f"- Shape: {df_filtered.shape}")
         st.write(f"- Range: Rank {rank_range[0]} to {rank_range[1]}")
-        st.write(f"- Categories: {', '.join(df_filtered['category'].unique())}")
+        if 'category' in df_filtered.columns:
+            st.write(f"- Categories: {', '.join(df_filtered['category'].unique())}")
     
     st.subheader("Column Information")
     
@@ -1548,25 +1641,3 @@ with st.expander("🔧 Debug Information", expanded=False):
     if st.button("Clear Cache"):
         st.cache_data.clear()
         st.rerun()
-
-# Add a little JavaScript for better UX
-st.markdown("""
-<script>
-// Smooth scrolling for anchor links
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        document.querySelector(this.getAttribute('href')).scrollIntoView({
-            behavior: 'smooth'
-        });
-    });
-});
-
-// Add loading state to buttons
-document.querySelectorAll('.stButton button').forEach(button => {
-    button.addEventListener('click', function() {
-        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-    });
-});
-</script>
-""", unsafe_allow_html=True)
