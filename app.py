@@ -173,7 +173,10 @@ if performance_filter == "Harga Naik 24h":
 elif performance_filter == "Harga Turun 24h":
     df_filtered = df_filtered[df_filtered["price_change_percentage_24h"] < 0]
 elif performance_filter == "Volatilitas Tinggi":
-    df_filtered = df_filtered[df_filtered["volatility_24h"] > df_filtered["volatility_24h"].quantile(0.75)]
+    df_filtered = df_filtered[
+        df_filtered["volatility_24h_raw"] >
+        df_filtered["volatility_24h_raw"].quantile(0.75)
+    ]
 elif performance_filter == "Volume Trading Tinggi":
     df_filtered = df_filtered[df_filtered["volume_marketcap_ratio"] > df_filtered["volume_marketcap_ratio"].quantile(0.75)]
 
@@ -480,14 +483,13 @@ with tab3:
             log_x=True,
             log_y=True,
             color="category",
-            size="size_normalized",
+            size="size_normalized",   # ✅ CUKUP SATU
             hover_data={
                 "price_change_percentage_24h": ":.2f%",
                 "volatility_24h_raw": ":.2%",
                 "volume_marketcap_ratio_raw": ":.3f",
                 "market_cap_rank": True
             },
-            size="size_normalized",  # Gunakan size yang sudah dinormalisasi
             template="plotly_dark",
             labels={
                 "current_price": "Harga (log)",
@@ -721,8 +723,9 @@ with tab4:
         )
         
         # Tambah supply inflation risk jika ada
-        if 'supply_inflation_risk' in df_filtered.columns:
-            df_filtered['risk_score_temp'] += df_filtered['supply_inflation_risk'].rank(pct=True) * 0.3
+        df_filtered['risk_score_temp'] += (
+            df_filtered['supply_inflation_risk_raw'].rank(pct=True) * 0.3
+        )
         
         high_risk = df_filtered.nlargest(10, 'risk_score_temp')[['symbol', 'name', 'risk_score_temp', 
                                                                'volatility_24h', 
@@ -771,4 +774,5 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
