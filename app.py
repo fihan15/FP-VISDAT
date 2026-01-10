@@ -477,7 +477,14 @@ with tab3:
     
     if len(df_filtered) > 0:
         # Scatter plot dengan kategori
-        scatter_data = df_filtered.head(100).copy()  # Batasi untuk visual yang lebih jelas
+        st.write("TOTAL df_filtered:", len(df_filtered))
+st.write("PER CATEGORY:")
+st.write(df_filtered["category"].value_counts())
+        scatter_data = (
+            df_filtered
+            .groupby("category", group_keys=False)
+            .apply(lambda x: x.sample(min(120, len(x)), random_state=42))
+        )
         
         fig = px.scatter(
             scatter_data,
@@ -486,24 +493,24 @@ with tab3:
             log_x=True,
             log_y=True,
             color="category",
-            size="size_normalized", 
+            size="size_normalized",
+            hover_name="symbol",
             hover_data={
-                "symbol": True,
                 "price_change_percentage_24h": ":.2f%",
                 "volatility_24h_raw": ":.2%",
                 "volume_marketcap_ratio_raw": ":.3f",
                 "market_cap_rank": True
             },
-            template="plotly_dark",
-            labels={
-                "current_price": "Harga (log)",
-                "market_cap": "Market Cap (log)",
-                "category": "Kategori"
-            }
+            template="plotly_dark"
         )
         
-        # Tambah trendline
-        fig.update_traces(marker=dict(opacity=0.7))
+        fig.update_traces(
+            marker=dict(
+                sizemin=6,
+                opacity=0.6
+            )
+        )
+
         st.plotly_chart(fig, use_container_width=True)
         st.caption("Ukuran bubble: Volume Trading | Warna: Kategori Market Cap")
     else:
@@ -791,6 +798,7 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
 
