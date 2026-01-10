@@ -739,17 +739,21 @@ with tab4:
             df_filtered['supply_inflation_risk_raw'].rank(pct=True) * 0.3
         )
         
-        high_risk = df_filtered.nlargest(10, 'risk_score_temp')[['symbol', 'name', 'risk_score_temp', 
-                                                               'volatility_24h', 
-                                                               'price_change_percentage_24h',
-                                                               'category']].copy()
+        high_risk = df_filtered.nlargest(10, 'risk_score_temp')[[
+            'symbol',
+            'name',
+            'risk_score_temp',
+            'volatility_24h_raw',
+            'price_change_percentage_24h',
+            'category'
+        ]].copy()
         
         high_risk['risk_score'] = high_risk['risk_score_temp'].apply(lambda x: f"{x:.1%}")
-        high_risk['volatility_24h'] = high_risk['volatility_24h'].apply(lambda x: f"{x:.2%}")
+        high_risk['volatility_24h_raw'] = high_risk['volatility_24h_raw'].apply(lambda x: f"{x:.2%}")
         high_risk['price_change_percentage_24h'] = high_risk['price_change_percentage_24h'].apply(
-            lambda x: f"{'+' if x > 0 else ''}{x:.2f}%")
+            lambda x: f"{'+' if x > 0 else ''}{x:.2f}%"
+        )
         
-        # Hapus kolom temporary
         high_risk = high_risk.drop('risk_score_temp', axis=1)
         
         st.dataframe(high_risk, use_container_width=True, hide_index=True)
@@ -786,6 +790,7 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
 
