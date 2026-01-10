@@ -214,12 +214,12 @@ with tab1:
         st.caption("Dalam range yang dipilih")
     
     with col2:
-        avg_vol = df_filtered["volatility_24h"].mean()
+        avg_vol = df_filtered["volatility_24h_raw"].mean()
         st.metric("Rata-rata Volatilitas", f"{avg_vol:.2%}")
         st.caption("24 jam terakhir")
     
     with col3:
-        avg_volume_ratio = df_filtered["volume_marketcap_ratio"].mean()
+        avg_volume_ratio = df_filtered["volume_marketcap_ratio_raw"].mean()
         st.metric("Avg Volume/MarketCap", f"{avg_volume_ratio:.3f}")
         st.caption("Rasio aktivitas")
     
@@ -509,9 +509,15 @@ with tab3:
     st.subheader("🔗 Matriks Korelasi")
     
     if len(df_filtered) > 0:
-        numeric_cols = ['current_price', 'market_cap', 'total_volume', 
-                       'price_change_percentage_24h', 'volatility_24h',
-                       'volume_marketcap_ratio', 'fdv_mc_ratio']
+        numeric_cols = [
+            'current_price',
+            'market_cap',
+            'total_volume',
+            'price_change_percentage_24h',
+            'volatility_24h_raw',
+            'volume_marketcap_ratio_raw',
+            'fdv_mc_ratio'
+        ]
         
         # Hanya ambil kolom yang ada
         available_numeric = [col for col in numeric_cols if col in df_filtered.columns]
@@ -536,8 +542,11 @@ with tab3:
     st.subheader("📋 Ringkasan Data")
     
     if len(df_filtered) > 0:
-        summary_cols = ['name', 'symbol', 'current_price', 'price_change_percentage_24h',
-                       'market_cap', 'volatility_24h', 'category']
+        summary_cols = [
+            'name', 'symbol', 'current_price',
+            'price_change_percentage_24h',
+            'market_cap', 'volatility_24h_raw', 'category'
+        ]
         
         # Hanya ambil kolom yang ada
         available_summary = [col for col in summary_cols if col in df_filtered.columns]
@@ -774,5 +783,6 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
