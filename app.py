@@ -486,8 +486,9 @@ with tab3:
             log_x=True,
             log_y=True,
             color="category",
-            size="size_normalized",   # ✅ CUKUP SATU
+            size="size_normalized", 
             hover_data={
+                "symbol": True,
                 "price_change_percentage_24h": ":.2f%",
                 "volatility_24h_raw": ":.2%",
                 "volume_marketcap_ratio_raw": ":.3f",
@@ -790,6 +791,7 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
 
 
 
