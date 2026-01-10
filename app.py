@@ -74,9 +74,14 @@ df["fdv_mc_ratio"] = df["fully_diluted_valuation"] / df["market_cap"]
 df["total_supply"] = df["total_supply"].fillna(df["circulating_supply"])
 df["has_1y_history"] = df["price_change_percentage_1y"].notna().astype(int)
 
-df["volatility_24h"] = (df["high_24h"] - df["low_24h"]) / df["current_price"]
-df["volume_marketcap_ratio"] = df["total_volume"] / df["market_cap"]
-df["supply_inflation_risk"] = 1 - df["supply_utilization"]
+# ===== RAW FEATURES (UNTUK LOGIKA & RISK) =====
+df["volatility_24h_raw"] = (df["high_24h"] - df["low_24h"]) / df["current_price"]
+df["volume_marketcap_ratio_raw"] = df["total_volume"] / df["market_cap"]
+
+# Supply inflation risk HARUS dibatasi
+df["supply_inflation_risk_raw"] = (
+    1 - df["supply_utilization"]
+).clip(lower=0, upper=1)
 
 # =====================
 # OUTLIER CAPPING & SCALING (PERBAIKAN UNTUK SIZE)
@@ -91,8 +96,8 @@ def cap_outliers(series):
 scale_cols = [
     "market_cap",
     "total_volume",
-    "volatility_24h",
-    "volume_marketcap_ratio"
+    "volatility_24h_raw",
+    "volume_marketcap_ratio_raw"
 ]
 
 # Simpan data asli untuk visualisasi
@@ -102,7 +107,12 @@ for col in scale_cols:
     df[col] = cap_outliers(df[col])
 
 scaler = RobustScaler()
-df[scale_cols] = scaler.fit_transform(df[scale_cols])
+scaled_values = scaler.fit_transform(df[scale_cols])
+
+df["market_cap_scaled"] = scaled_values[:, 0]
+df["total_volume_scaled"] = scaled_values[:, 1]
+df["volatility_24h_scaled"] = scaled_values[:, 2]
+df["volume_marketcap_ratio_scaled"] = scaled_values[:, 3]
 
 # Normalisasi size untuk visualisasi (pastikan tidak negatif)
 df["size_normalized"] = (df["total_volume_original"] - df["total_volume_original"].min()) / \
@@ -470,13 +480,12 @@ with tab3:
             log_x=True,
             log_y=True,
             color="category",
-            hover_name="name",
+            size="size_normalized",
             hover_data={
                 "price_change_percentage_24h": ":.2f%",
-                "volatility_24h": ":.3f",
-                "volume_marketcap_ratio": ":.3f",
-                "market_cap_rank": True,
-                "category": False
+                "volatility_24h_raw": ":.2%",
+                "volume_marketcap_ratio_raw": ":.3f",
+                "market_cap_rank": True
             },
             size="size_normalized",  # Gunakan size yang sudah dinormalisasi
             template="plotly_dark",
@@ -575,12 +584,28 @@ with tab4:
         
         # Hitung risk score komposit
         if len(df_filtered) > 0:
-            volatility_risk = df_filtered['volatility_24h'].mean() * 100
-            sentiment_risk = (df_filtered['price_change_percentage_24h'] < 0).mean() * 100
-            inflation_risk = df_filtered['supply_inflation_risk'].mean() * 100 if 'supply_inflation_risk' in df_filtered.columns else 0
+            volatility_risk = (
+                df_filtered["volatility_24h_raw"]
+                .clip(0, df_filtered["volatility_24h_raw"].quantile(0.95))
+                .mean() * 100
+            )
             
-            risk_score = (volatility_risk * 0.4 + sentiment_risk * 0.3 + inflation_risk * 0.3)
-            risk_score = min(max(risk_score, 0), 100)  # Pastikan antara 0-100
+            sentiment_risk = (
+                df_filtered["price_change_percentage_24h"] < 0
+            ).mean() * 100
+            
+            inflation_risk = (
+                df_filtered["supply_inflation_risk_raw"]
+                .mean() * 100
+            )
+            
+            risk_score = (
+                volatility_risk * 0.4 +
+                sentiment_risk * 0.3 +
+                inflation_risk * 0.3
+            )
+            
+            risk_score = np.clip(risk_score, 0, 100)
             
             fig = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
@@ -628,11 +653,17 @@ with tab4:
         
         if len(df_filtered) > 0 and 'category' in df_filtered.columns:
             # Hitung risk metrics per kategori
-            risk_metrics = df_filtered.groupby('category').agg({
-                'volatility_24h': 'mean',
-                'price_change_percentage_24h': lambda x: (x < 0).mean() if len(x) > 0 else 0,
-                'supply_inflation_risk': 'mean' if 'supply_inflation_risk' in df_filtered.columns else None
+            risk_metrics = df_filtered.groupby("category").agg({
+                "volatility_24h_raw": "mean",
+                "price_change_percentage_24h": lambda x: (x < 0).mean(),
+                "supply_inflation_risk_raw": "mean"
             }).reset_index()
+
+            risk_metrics.rename(columns={
+                "volatility_24h_raw": "Volatility Risk",
+                "price_change_percentage_24h": "Negative Sentiment",
+                "supply_inflation_risk_raw": "Supply Inflation Risk"
+            }, inplace=True)
             
             # Hapus kolom yang tidak ada
             risk_metrics = risk_metrics.dropna(axis=1, how='all')
@@ -683,9 +714,10 @@ with tab4:
     
     if len(df_filtered) > 0:
         # Hitung risk score untuk setiap koin
-        df_filtered['risk_score_temp'] = (
-            df_filtered['volatility_24h'].rank(pct=True) * 0.4 +
-            (df_filtered['price_change_percentage_24h'] < 0).astype(int) * 0.3
+        df_filtered["risk_score_temp"] = (
+            df_filtered["volatility_24h_raw"].rank(pct=True) * 0.4 +
+            (df_filtered["price_change_percentage_24h"] < 0).astype(int) * 0.3 +
+            df_filtered["supply_inflation_risk_raw"].rank(pct=True) * 0.3
         )
         
         # Tambah supply inflation risk jika ada
@@ -739,3 +771,4 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
