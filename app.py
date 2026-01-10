@@ -571,57 +571,50 @@ with tab4:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("⚠️ Indikator Risiko Pasar")
+            st.subheader("⚠️ Indikator Risiko Pasar")
+
+            # ===== RISK COMPONENTS (RAW) =====
+            volatility_risk = df_filtered["volatility_raw"].mean() * 100
+            sentiment_risk = (df_filtered["price_change_percentage_24h"] < 0).mean() * 100
+            inflation_risk = df_filtered["inflation_raw"].mean() * 100
         
-        # Hitung risk score komposit
-        if len(df_filtered) > 0:
-            volatility_risk = df_filtered['volatility_24h'].mean() * 100
-            sentiment_risk = (df_filtered['price_change_percentage_24h'] < 0).mean() * 100
-            inflation_risk = df_filtered['supply_inflation_risk'].mean() * 100 if 'supply_inflation_risk' in df_filtered.columns else 0
-            
-            risk_score = (volatility_risk * 0.4 + sentiment_risk * 0.3 + inflation_risk * 0.3)
-            risk_score = min(max(risk_score, 0), 100)  # Pastikan antara 0-100
-            
+            # Clamp
+            volatility_risk = np.clip(volatility_risk, 0, 50)
+            sentiment_risk = np.clip(sentiment_risk, 0, 100)
+            inflation_risk = np.clip(inflation_risk, 0, 100)
+        
+            # Composite Score
+            risk_score = (
+                volatility_risk * 0.4 +
+                sentiment_risk * 0.3 +
+                inflation_risk * 0.3
+            )
+        
+            # ===== GAUGE =====
             fig = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
                 value=risk_score,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Tingkat Risiko Pasar", 'font': {'size': 20}},
-                delta={'reference': 50},
+                delta={"reference": 50},
                 gauge={
-                    'axis': {'range': [0, 100]},
-                    'bar': {'color': "darkblue"},
-                    'steps': [
-                        {'range': [0, 30], 'color': "green"},
-                        {'range': [30, 70], 'color': "yellow"},
-                        {'range': [70, 100], 'color': "red"}
+                    "axis": {"range": [0, 100]},
+                    "steps": [
+                        {"range": [0, 30], "color": "green"},
+                        {"range": [30, 70], "color": "yellow"},
+                        {"range": [70, 100], "color": "red"},
                     ],
-                    'threshold': {
-                        'line': {'color': "white", 'width': 4},
-                        'thickness': 0.75,
-                        'value': risk_score
-                    }
-                }
+                    "bar": {"color": "darkblue"}
+                },
+                title={"text": "Tingkat Risiko Pasar"}
             ))
-            
-            fig.update_layout(
-                template="plotly_dark",
-                height=350,
-                margin=dict(l=20, r=20, t=50, b=20)
-            )
+        
+            fig.update_layout(template="plotly_dark", height=350)
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Risk breakdown
-            st.markdown("**Breakdown Risiko:**")
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.metric("Volatilitas", f"{volatility_risk:.1f}")
-            with col_b:
-                st.metric("Sentimen", f"{sentiment_risk:.1f}")
-            with col_c:
-                st.metric("Inflation", f"{inflation_risk:.1f}")
-        else:
-            st.info("Tidak ada data untuk kalkulasi risiko")
+        
+            # ===== BREAKDOWN =====
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Volatilitas", f"{volatility_risk:.1f}")
+            col2.metric("Sentimen", f"{sentiment_risk:.1f}")
+            col3.metric("Inflasi Supply", f"{inflation_risk:.1f}")
     
     with col2:
         st.subheader("📊 Distribusi Risiko per Kategori")
@@ -739,3 +732,4 @@ with footer_col2:
 
 with footer_col3:
     st.caption(f"🔍 Total data point: {len(df_filtered)}")
+
